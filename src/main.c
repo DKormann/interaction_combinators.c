@@ -64,6 +64,7 @@ struct node{
 	struct port aux2;
 };
 
+
 void push(void* value, void** stack, int* stack_top){
 	stack[*stack_top] = value;
 	(*stack_top)++;
@@ -172,28 +173,26 @@ int set_port(struct node* node, char port_number, void* location, char target_po
 	return 0;
 }
 
-int connect_ports(struct node* a, char an, struct node* b, char bn, void** stack, int* stack_top){
-
+int connect_nodes(struct node* a, struct node* b, char an, char bn, void** stack, int* stack_top){
 	if (get_polarity(a->tag, an) == get_polarity(b->tag, bn)){
 		printf("Error: Polarities do not match for ports %s.%d and %s.%d\n", rep_node(a), an, rep_node(b), bn);
 		return 1;
-	};
-
+	}
 	if (set_port(a, an, b, bn)){
 		return 1;
-	};
+	}
 	if (set_port(b, bn, a, an)){
 		return 1;
-	};
-
+	}
 	if (an == 0 && bn == 0){
 		push(a, stack, stack_top);
 	}
-
 	return 0;
 }
 
-
+int connect_ports(struct port a, struct port b, void** stack, int* stack_top){
+	return connect_nodes(a.location, b.location, a.port_number, b.port_number, stack, stack_top);
+}
 
 int interact(struct node* a, struct node* b, void** stack, int* stack_top){
 
@@ -221,8 +220,9 @@ int interact(struct node* a, struct node* b, void** stack, int* stack_top){
 					char child2_port = b->aux2.port_number;
 					struct node* era1 = a;
 					struct node* era2 = new_node(ERA_TAG);
-					connect_ports(era1, 0, child1, child1_port, stack, stack_top);
-					connect_ports(era2, 0, child2, child2_port, stack, stack_top);
+					connect_nodes(era1, child1, 0, child1_port, stack, stack_top);
+					connect_nodes(era2, child2, 0, child2_port, stack, stack_top);
+
 					free_node(b);
 					return 0;
 				}
@@ -276,23 +276,75 @@ int reduce(void** stack, int* stack_top){
 
 
 
-int main(void) {
-	void** stack = malloc(sizeof(void*) * STACK_SIZE);
-	int stack_top = 0;
+struct port era(void){
+	struct node* node = new_node(ERA_TAG);
+	return (struct port){
+		.location = node,
+		.port_number = 0
+	};
+}
 
-	for (int i = 0; i < 1; i++){
-		struct node* a = new_node(ERA_TAG);
-		struct node* b = new_node(NULL_TAG);
+struct port null(void){
+	struct node* node = new_node(NULL_TAG);
+	return (struct port){
+		.location = node,
+		.port_number = 0
+	};
+}
 
-		connect_ports(a, 0, b, 0, stack, &stack_top);
-		push(a, stack, &stack_top);
-		printf("Node count: %d\n", node_count);
-		reduce(stack, &stack_top);
-		printf("Node count: %d\n", node_count);
+struct port bin(struct port a, struct port b, char tag){
+	struct node* dup = new_node(tag);
+	connect_nodes(dup, a.location, 1, a.port_number, NULL, NULL);
+	connect_nodes(dup, b.location, 2, b.port_number, NULL, NULL);
+	return (struct port){
+		.location = dup,
+		.port_number = 0
+	};
+}
+
+struct port dup(struct port a, struct port b){
+	return bin(a, b, DUP_TAG);
+}
+
+struct port sup(struct port a, struct port b){
+	return bin(a, b, SUP_TAG);
+}
+
+int build_era_sup_null_null(void** stack, int* stack_top){
+	struct port e = era();
+	struct port a = null();
+	struct port b = null();
+	struct port d = sup(a, b);
+	connect_ports(e, d, stack, stack_top);
+	return 0;
+}
+
+int execute_stack(void** stack, int* stack_top, int* interaction_count){
+	while (*stack_top > 0){
+		if (reduce(stack, stack_top)){
+			return 1;
+		}
+		(*interaction_count)++;
 	}
+	return 0;
+}
 
+int run_test(int (*a)(void** stack, int* stack_top)){
+	void ** stack = malloc(sizeof(void*) * STACK_SIZE);
+	int stack_top = 0;
+	int interaction_count = 0;
+
+	a(stack, &stack_top);
+	printf("Node count: %d\n", node_count);
+	execute_stack(stack, &stack_top, &interaction_count);
+	printf("Node count: %d\n", node_count);
+	printf("Interaction count: %d\n", interaction_count);
 	free(stack);
+	return 0;
+}
 
-	printf("Stack freed\n");
+int main(void) {
+	printf("Running test build_era_sup_null_null\n");
+	run_test(build_era_sup_null_null);
 	return 0;
 }
