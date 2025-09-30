@@ -53,7 +53,7 @@ SUP:
 int node_count = 0;
 
 struct port {
-	void* location;
+	struct node* location;
 	char port_number;
 };
 
@@ -62,6 +62,7 @@ struct node{
 	struct port main;
 	struct port aux1;
 	struct port aux2;
+	char label;
 };
 
 
@@ -194,18 +195,52 @@ int connect_ports(struct port a, struct port b, void** stack, int* stack_top){
 	return connect_nodes(a.location, b.location, a.port_number, b.port_number, stack, stack_top);
 }
 
+int annihilate(struct node* a, struct node* b, void** stack, int* stack_top){
+	free_node(a);
+	free_node(b);
+	return 0;
+}
+
+int erase(struct node* e, struct node* c, void** stack, int* stack_top){
+	struct node* e2 = new_node(e->tag);
+	connect_nodes(e, c->aux1.location, 0, c->aux1.port_number, stack, stack_top);
+	connect_nodes(e2, c->aux2.location, 0, c->aux2.port_number, stack, stack_top);
+	free_node(c);
+	return 0;
+}
+
+int commute(struct node* a, struct node* b, void** stack, int* stack_top){
+	struct node* a2 = new_node(a->tag);
+	a2->label = a->label;
+	struct node* b2 = new_node(b->tag);
+	b2->label = b->label;
+	connect_nodes(b->aux1.location, a, b->aux1.port_number, 0, stack, stack_top);
+	connect_nodes(b->aux2.location, a2, b->aux2.port_number, 0, stack, stack_top);
+	connect_nodes(a->aux1.location, b2, a->aux1.port_number, 0, stack, stack_top);
+	connect_nodes(a->aux2.location, b, a->aux2.port_number, 0, stack, stack_top);
+	connect_nodes(a, b, 2, 1, stack, stack_top);
+	connect_nodes(a, b2, 1, 1, stack, stack_top);
+	connect_nodes(a2, b, 2, 2, stack, stack_top);
+	connect_nodes(a2, b2, 1, 2, stack, stack_top);
+	return 0;
+}
+
+int cancel(struct node* a, struct node* b, void** stack, int* stack_top){
+	connect_nodes(a->aux1.location, b->aux1.location, a->aux1.port_number, b->aux1.port_number, stack, stack_top);
+	connect_nodes(a->aux2.location, b->aux2.location, a->aux2.port_number, b->aux2.port_number, stack, stack_top);
+	free_node(a);
+	free_node(b);
+	return 0;
+}
+
 int interact(struct node* a, struct node* b, void** stack, int* stack_top){
 
 	switch (a->tag){
 		case ERA_TAG:
 			switch (b->tag){
-				case NULL_TAG:{	
-					free_node(a);
-					free_node(b);
-					return 0;
+				case NULL_TAG:{
+					return annihilate(a, b, stack, stack_top);
 				}
-				
-				
 				case LAM_TAG: {
 					if (b->aux1.location == b->aux2.location){
 						free_node(a);
@@ -214,42 +249,30 @@ int interact(struct node* a, struct node* b, void** stack, int* stack_top){
 					}
 				}
 				case SUP_TAG:{
-					struct node *child1 = b->aux1.location;
-					char child1_port = b->aux1.port_number;
-					struct node *child2 = b->aux2.location;
-					char child2_port = b->aux2.port_number;
-					struct node* era1 = a;
-					struct node* era2 = new_node(ERA_TAG);
-					connect_nodes(era1, child1, 0, child1_port, stack, stack_top);
-					connect_nodes(era2, child2, 0, child2_port, stack, stack_top);
-
-					free_node(b);
-					return 0;
+					
+					return erase(a, b, stack, stack_top);
 				}
 			}
 		case APP_TAG:
 			switch (b->tag){
 				case NULL_TAG:
-					printf("TODO: APP -> NULL\n");
-					return 0;
+					return erase(b, a, stack, stack_top);
 				case LAM_TAG:
-					printf("TODO: APP -> LAM\n");
-					return 0;
+					return cancel(a,b, stack, stack_top);
 				case SUP_TAG:
-					printf("TODO: APP -> SUP\n");
-					return 0;
+					return commute(a,b, stack, stack_top);
 			}
 		case DUP_TAG:
 			switch (b->tag){
 				case NULL_TAG:
-					printf("TODO: DUP -> NULL\n");
-					return 0;
+					return erase(b, a, stack, stack_top);
 				case LAM_TAG:
-					printf("TODO: DUP -> LAM\n");
-					return 0;
+					return commute(a,b, stack, stack_top);
 				case SUP_TAG:
-					printf("TODO: DUP -> SUP\n");
-					return 0;
+					if (a->label == b->label){
+						return cancel(a,b, stack, stack_top);
+					}
+					return commute(a,b, stack, stack_top);
 			}
 		case NULL_TAG:
 		case LAM_TAG:
@@ -302,20 +325,36 @@ struct port bin(struct port a, struct port b, char tag){
 	};
 }
 
-struct port dup(struct port a, struct port b){
-	return bin(a, b, DUP_TAG);
+struct port dup(struct port a, struct port b, char label){
+	struct port r = bin(a, b, DUP_TAG);
+	r.location->label = label;
+	return r;
 }
 
-struct port sup(struct port a, struct port b){
-	return bin(a, b, SUP_TAG);
+struct port sup(struct port a, struct port b, char label){
+	struct port r = bin(a, b, SUP_TAG);
+	r.location->label = label;
+	return r;
 }
 
 int build_era_sup_null_null(void** stack, int* stack_top){
 	struct port e = era();
 	struct port a = null();
 	struct port b = null();
-	struct port d = sup(a, b);
+	struct port d = sup(a, b, 0);
 	connect_ports(e, d, stack, stack_top);
+	return 0;
+}
+
+int build_dup0_era_era_sup0_null_null(void** stack, int* stack_top){
+	struct port dee = dup(era(), era(), 0);
+	struct port snn = sup(null(), null(), 0);
+	connect_ports(dee, snn, stack, stack_top);
+	return 0;
+}
+
+int build_dup0_era_era_sup1_null_null(void** stack, int* stack_top){
+	connect_ports(dup(era(), era(), 0), sup(null(), null(), 1), stack, stack_top);
 	return 0;
 }
 
@@ -346,5 +385,10 @@ int run_test(int (*a)(void** stack, int* stack_top)){
 int main(void) {
 	printf("Running test build_era_sup_null_null\n");
 	run_test(build_era_sup_null_null);
+	printf("Running test build_dup_era_era_sup_null_null\n");
+	run_test(build_dup0_era_era_sup0_null_null);
+
+	printf("Running test build_dup0_era_era_sup1_null_null\n");
+	run_test(build_dup0_era_era_sup1_null_null);
 	return 0;
 }
