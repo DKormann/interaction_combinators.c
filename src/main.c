@@ -195,7 +195,7 @@ int connect_ports(struct port a, struct port b, void** stack, int* stack_top){
 	return connect_nodes(a.location, b.location, a.port_number, b.port_number, stack, stack_top);
 }
 
-int annihilate(struct node* a, struct node* b, void** stack, int* stack_top){
+int annihilate(struct node* a, struct node* b){
 	free_node(a);
 	free_node(b);
 	return 0;
@@ -239,17 +239,14 @@ int interact(struct node* a, struct node* b, void** stack, int* stack_top){
 		case ERA_TAG:
 			switch (b->tag){
 				case NULL_TAG:{
-					return annihilate(a, b, stack, stack_top);
+					return annihilate(a, b);
 				}
 				case LAM_TAG: {
 					if (b->aux1.location == b->aux2.location){
-						free_node(a);
-						free_node(b);
-						return 0;
+						return annihilate(a,b);
 					}
 				}
 				case SUP_TAG:{
-					
 					return erase(a, b, stack, stack_top);
 				}
 			}
@@ -387,7 +384,6 @@ int main(void) {
 	run_test(build_era_sup_null_null);
 	printf("Running test build_dup_era_era_sup_null_null\n");
 	run_test(build_dup0_era_era_sup0_null_null);
-
 	printf("Running test build_dup0_era_era_sup1_null_null\n");
 	run_test(build_dup0_era_era_sup1_null_null);
 	return 0;
