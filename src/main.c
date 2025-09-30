@@ -50,6 +50,7 @@ SUP:
 #define DUP_TAG 4
 #define SUP_TAG 5
 
+int node_count = 0;
 
 struct port {
 	void* location;
@@ -123,9 +124,15 @@ char* rep_node(struct node* node){
 }
 
 struct node* new_node(char tag){
+	node_count++;
 	struct node* node = malloc(sizeof(struct node));
 	node->tag = tag;
 	return node;
+}
+
+void free_node(struct node* node){
+	node_count--;
+	free(node);
 }
 
 char arity(char tag){
@@ -134,7 +141,6 @@ char arity(char tag){
 	}
 	return 3;
 }
-
 
 int set_port(struct node* node, char port_number, void* location, char target_port_number){
 
@@ -166,8 +172,7 @@ int set_port(struct node* node, char port_number, void* location, char target_po
 	return 0;
 }
 
-
-int connect_ports(struct node* a, char an, struct node* b, char bn){
+int connect_ports(struct node* a, char an, struct node* b, char bn, void** stack, int* stack_top){
 
 	if (get_polarity(a->tag, an) == get_polarity(b->tag, bn)){
 		printf("Error: Polarities do not match for ports %s.%d and %s.%d\n", rep_node(a), an, rep_node(b), bn);
@@ -181,8 +186,95 @@ int connect_ports(struct node* a, char an, struct node* b, char bn){
 		return 1;
 	};
 
+	if (an == 0 && bn == 0){
+		push(a, stack, stack_top);
+	}
+
 	return 0;
 }
+
+
+
+int interact(struct node* a, struct node* b, void** stack, int* stack_top){
+
+	switch (a->tag){
+		case ERA_TAG:
+			switch (b->tag){
+				case NULL_TAG:{	
+					free_node(a);
+					free_node(b);
+					return 0;
+				}
+				
+				
+				case LAM_TAG: {
+					if (b->aux1.location == b->aux2.location){
+						free_node(a);
+						free_node(b);
+						return 0;
+					}
+				}
+				case SUP_TAG:{
+					struct node *child1 = b->aux1.location;
+					char child1_port = b->aux1.port_number;
+					struct node *child2 = b->aux2.location;
+					char child2_port = b->aux2.port_number;
+					struct node* era1 = a;
+					struct node* era2 = new_node(ERA_TAG);
+					connect_ports(era1, 0, child1, child1_port, stack, stack_top);
+					connect_ports(era2, 0, child2, child2_port, stack, stack_top);
+					free_node(b);
+					return 0;
+				}
+			}
+		case APP_TAG:
+			switch (b->tag){
+				case NULL_TAG:
+					printf("TODO: APP -> NULL\n");
+					return 0;
+				case LAM_TAG:
+					printf("TODO: APP -> LAM\n");
+					return 0;
+				case SUP_TAG:
+					printf("TODO: APP -> SUP\n");
+					return 0;
+			}
+		case DUP_TAG:
+			switch (b->tag){
+				case NULL_TAG:
+					printf("TODO: DUP -> NULL\n");
+					return 0;
+				case LAM_TAG:
+					printf("TODO: DUP -> LAM\n");
+					return 0;
+				case SUP_TAG:
+					printf("TODO: DUP -> SUP\n");
+					return 0;
+			}
+		case NULL_TAG:
+		case LAM_TAG:
+		case SUP_TAG:
+			switch (b->tag){
+				case ERA_TAG:
+				case APP_TAG:
+				case DUP_TAG:
+					return interact(b, a, stack, stack_top);
+			}
+	}
+	printf("ERROR: Invalid interaction %s -> %s\n", rep_node(a), rep_node(b));
+	return 1;
+}
+
+int reduce(void** stack, int* stack_top){
+
+	(*stack_top)--;
+	struct node* a = (struct node*)stack[*stack_top];
+	struct node* b = a->main.location;
+
+	return interact(a, b, stack, stack_top);
+}
+
+
 
 int main(void) {
 	void** stack = malloc(sizeof(void*) * STACK_SIZE);
@@ -192,9 +284,11 @@ int main(void) {
 		struct node* a = new_node(ERA_TAG);
 		struct node* b = new_node(NULL_TAG);
 
-		connect_ports(a, 0, b, 0);
+		connect_ports(a, 0, b, 0, stack, &stack_top);
 		push(a, stack, &stack_top);
-
+		printf("Node count: %d\n", node_count);
+		reduce(stack, &stack_top);
+		printf("Node count: %d\n", node_count);
 	}
 
 	free(stack);
