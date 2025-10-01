@@ -9,8 +9,8 @@
 
 /*
 POLARIZED NODE TYPES
-negative node: value
-positive node: consumer
+negative Node: value
+positive Node: consumer
 ERA:
 	main: +
 
@@ -52,28 +52,49 @@ SUP:
 
 int node_count = 0;
 
-struct port {
-	struct node* location;
+typedef struct port {
+	struct Node* location;
 	char port_number;
-};
+}Port;
 
-struct node{
+
+
+
+
+typedef struct Node{
 	char tag;
 	struct port main;
 	struct port aux1;
 	struct port aux2;
 	char label;
-};
+} Node;
 
+typedef struct Runtime{
+	Node** stack;
+	int stack_top;
+} Runtime;
 
-void push(void* value, void** stack, int* stack_top){
-	stack[*stack_top] = value;
-	(*stack_top)++;
+Runtime fresh_runtime(void){
+	return (Runtime){.stack = malloc(sizeof(Node*) * STACK_SIZE), .stack_top = 0};
+}
+
+void free_runtime(Runtime* runtime){
+	free(runtime->stack);
+	// free(runtime);
 }
 
 
-char get_tag(void* node){
-	return ((struct node*)node)->tag;
+// typedef struct Node Node;
+
+
+void push(void* value, Runtime* runtime){
+	runtime->stack[runtime->stack_top] = value;
+	runtime->stack_top++;
+}
+
+
+char get_tag(void* Node){
+	return ((struct Node*)Node)->tag;
 }
 
 char get_arity(char tag){
@@ -95,7 +116,7 @@ char get_polarity(char tag, char port_number){
 		case LAM_TAG:
 			return port_number == 2 ? 1 : -1;
 		case APP_TAG:
-			return port_number == 1 ? -1 : 1;
+			return port_number == 2 ? -1 : 1;
 		case DUP_TAG:
 			return port_number == 0 ? 1 : -1;
 		case SUP_TAG:
@@ -105,36 +126,37 @@ char get_polarity(char tag, char port_number){
 	}
 }
 
-char* rep_node(struct node* node){
-	switch (get_tag(node)){
+char* rep_node(struct Node* Node){
+	switch (get_tag(Node)){
 		case ERA_TAG:
-			return "<Era node %p>";
+			return "<Era Node %p>";
 		case NULL_TAG:
-			return "<Null node %p>";
+			return "<Null Node %p>";
 		case LAM_TAG:
-			return "<Lam node %p>";
+			return "<Lam Node %p>";
 		case APP_TAG:
-			return "<App node %p>";
+			return "<App Node %p>";
 		case DUP_TAG:
-			return "<Dup node %p>";
+			return "<Dup Node %p>";
 		case SUP_TAG:
-			return "<Sup node %p>";
+			return "<Sup Node %p>";
 		default:
-			return "<Unknown node %p>";
+			return "<Unknown Node %p>";
 	}
-	return "<Unknown node %p>";
+	return "<Unknown Node %p>";
 }
 
-struct node* new_node(char tag){
+struct Node* new_node(char tag){
 	node_count++;
-	struct node* node = malloc(sizeof(struct node));
-	node->tag = tag;
-	return node;
+	struct Node* Node = malloc(sizeof(struct Node));
+	Node->tag = tag;
+	return Node;
 }
 
-void free_node(struct node* node){
+
+void free_node(struct Node* Node){
 	node_count--;
-	free(node);
+	free(Node);
 }
 
 char arity(char tag){
@@ -144,10 +166,10 @@ char arity(char tag){
 	return 3;
 }
 
-int set_port(struct node* node, char port_number, void* location, char target_port_number){
+int set_port(struct Node* Node, char port_number, void* location, char target_port_number){
 
-	if (arity(node->tag) == 1 && port_number > 0){
-		printf("Error: Cannot set port %d to node %s\n", port_number, rep_node(node));
+	if (arity(Node->tag) == 1 && port_number > 0){
+		printf("Error: Cannot set port %d to Node %s\n", port_number, rep_node(Node));
 		return 1;
 	};
 
@@ -155,13 +177,13 @@ int set_port(struct node* node, char port_number, void* location, char target_po
 
 	switch (port_number){
 		case 0:
-			port = &node->main;
+			port = &Node->main;
 			break;
 		case 1:
-			port = &node->aux1;
+			port = &Node->aux1;
 			break;
 		case 2:
-			port = &node->aux2;
+			port = &Node->aux2;
 			break;
 		default:
 			printf("Error: Invalid port number %d\n", port_number);
@@ -174,7 +196,7 @@ int set_port(struct node* node, char port_number, void* location, char target_po
 	return 0;
 }
 
-int connect_nodes(struct node* a, struct node* b, char an, char bn, void** stack, int* stack_top){
+int connect_nodes(struct Node* a, struct Node* b, char an, char bn, Runtime* runtime){
 	if (get_polarity(a->tag, an) == get_polarity(b->tag, bn)){
 		printf("Error: Polarities do not match for ports %s.%d and %s.%d\n", rep_node(a), an, rep_node(b), bn);
 		return 1;
@@ -186,140 +208,208 @@ int connect_nodes(struct node* a, struct node* b, char an, char bn, void** stack
 		return 1;
 	}
 	if (an == 0 && bn == 0){
-		push(a, stack, stack_top);
+		push(a, runtime);
 	}
 	return 0;
 }
 
-int connect_ports(struct port a, struct port b, void** stack, int* stack_top){
-	return connect_nodes(a.location, b.location, a.port_number, b.port_number, stack, stack_top);
+int connect_ports(struct port a, struct port b, Runtime* runtime){
+	return connect_nodes(a.location, b.location, a.port_number, b.port_number, runtime);
 }
 
-int annihilate(struct node* a, struct node* b){
+int add_aux(struct Node* Node, char port_number, struct port a){
+	if (port_number==0){
+		printf("Not an aux port\n");
+		return 1;
+	}
+	return connect_nodes(Node, a.location, port_number, a.port_number, NULL);
+}
+
+int add_auxs(struct Node* Node, struct port a, struct port b){
+	if (add_aux(Node, 1, a)){
+		return 1;
+	}
+	return add_aux(Node, 2, b);
+}
+
+
+int annihilate(struct Node* a, struct Node* b){
 	free_node(a);
 	free_node(b);
 	return 0;
 }
 
-int erase(struct node* e, struct node* c, void** stack, int* stack_top){
-	struct node* e2 = new_node(e->tag);
-	connect_nodes(e, c->aux1.location, 0, c->aux1.port_number, stack, stack_top);
-	connect_nodes(e2, c->aux2.location, 0, c->aux2.port_number, stack, stack_top);
+int erase(struct Node* e, struct Node* c, Runtime* runtime){
+	struct Node* e2 = new_node(e->tag);
+	connect_nodes(e, c->aux1.location, 0, c->aux1.port_number, runtime);
+	connect_nodes(e2, c->aux2.location, 0, c->aux2.port_number, runtime);
 	free_node(c);
 	return 0;
 }
 
-int commute(struct node* a, struct node* b, void** stack, int* stack_top){
-	struct node* a2 = new_node(a->tag);
+int commute(struct Node* a, struct Node* b, Runtime* runtime){
+	struct Node* a2 = new_node(a->tag);
 	a2->label = a->label;
-	struct node* b2 = new_node(b->tag);
+	struct Node* b2 = new_node(b->tag);
 	b2->label = b->label;
-	connect_nodes(b->aux1.location, a, b->aux1.port_number, 0, stack, stack_top);
-	connect_nodes(b->aux2.location, a2, b->aux2.port_number, 0, stack, stack_top);
-	connect_nodes(a->aux1.location, b2, a->aux1.port_number, 0, stack, stack_top);
-	connect_nodes(a->aux2.location, b, a->aux2.port_number, 0, stack, stack_top);
-	connect_nodes(a, b, 2, 1, stack, stack_top);
-	connect_nodes(a, b2, 1, 1, stack, stack_top);
-	connect_nodes(a2, b, 2, 2, stack, stack_top);
-	connect_nodes(a2, b2, 1, 2, stack, stack_top);
+	connect_nodes(b->aux1.location, a, b->aux1.port_number, 0, runtime);
+	connect_nodes(b->aux2.location, a2, b->aux2.port_number, 0, runtime);
+	connect_nodes(a->aux1.location, b2, a->aux1.port_number, 0, runtime);
+	connect_nodes(a->aux2.location, b, a->aux2.port_number, 0, runtime);
+	connect_nodes(a, b, 2, 1, runtime);
+	connect_nodes(a, b2, 1, 1, runtime);
+	connect_nodes(a2, b, 2, 2, runtime);
+	connect_nodes(a2, b2, 1, 2, runtime);
 	return 0;
 }
 
-int cancel(struct node* a, struct node* b, void** stack, int* stack_top){
-	connect_nodes(a->aux1.location, b->aux1.location, a->aux1.port_number, b->aux1.port_number, stack, stack_top);
-	connect_nodes(a->aux2.location, b->aux2.location, a->aux2.port_number, b->aux2.port_number, stack, stack_top);
+int cancel(struct Node* a, struct Node* b, Runtime* runtime){
+	connect_nodes(a->aux1.location, b->aux1.location, a->aux1.port_number, b->aux1.port_number, runtime);
+	connect_nodes(a->aux2.location, b->aux2.location, a->aux2.port_number, b->aux2.port_number, runtime);
 	free_node(a);
 	free_node(b);
 	return 0;
 }
 
-int interact(struct node* a, struct node* b, void** stack, int* stack_top){
+typedef enum {
+	NODE_TYPE_ERA,
+	NODE_TYPE_NULL,
+	NODE_TYPE_LAM,
+	NODE_TYPE_APP,
+	NODE_TYPE_DUP,
+	NODE_TYPE_SUP,
+} node_type;
+
+
+Port* get_port(struct Node* Node, char port_number){
+	switch (port_number){
+		case 0:
+			return &Node->main;
+		case 1:
+			return &Node->aux1;
+		case 2:
+			return &Node->aux2;
+	}
+	printf("Error: Invalid port number %d\n", port_number);
+	return NULL;
+}
+
+int check_port(Node* location, char port_number){
+
+	Node* node_a = location;
+	Port* port_a = get_port(node_a, port_number);
+
+	Node* node_b = port_a->location;
+	Port* port_b = get_port(node_b, port_a->port_number);
+	
+	if (port_b->location != location){
+		return 1;
+	}
+
+	if (port_b->port_number != port_number){
+		return 1;
+	}
+
+	return 0;
+}
+
+int check_node(struct Node* Node){
+
+	for (int i = 0; i < get_arity(Node->tag); i++){
+		if (check_port(Node, i)){
+			printf("Error: Invalid port %d for Node %s\n", i, rep_node(Node));
+			return 1;
+		}
+	}
+	return 0;
+
+}
+
+int interact(struct Node* a, struct Node* b, Runtime* runtime){
+
+	if (check_node(a)){
+		return 1;
+	}
+	if (check_node(b)){
+		return 1;
+	}
 
 	switch (a->tag){
 		case ERA_TAG:
 			switch (b->tag){
-				case NULL_TAG:{
-					return annihilate(a, b);
-				}
-				case LAM_TAG: {
+				case NULL_TAG:return annihilate(a, b);
+				case LAM_TAG:
 					if (b->aux1.location == b->aux2.location){
 						return annihilate(a,b);
 					}
-				}
-				case SUP_TAG:{
-					return erase(a, b, stack, stack_top);
-				}
+				case SUP_TAG: return erase(a, b, runtime);
 			}
 		case APP_TAG:
 			switch (b->tag){
-				case NULL_TAG:
-					return erase(b, a, stack, stack_top);
-				case LAM_TAG:
-					return cancel(a,b, stack, stack_top);
-				case SUP_TAG:
-					return commute(a,b, stack, stack_top);
+				case NULL_TAG: return erase(b, a, runtime);
+				case LAM_TAG: return cancel(a,b, runtime);
+				case SUP_TAG: return commute(a,b, runtime);
 			}
 		case DUP_TAG:
 			switch (b->tag){
-				case NULL_TAG:
-					return erase(b, a, stack, stack_top);
-				case LAM_TAG:
-					return commute(a,b, stack, stack_top);
+				case NULL_TAG: return erase(b, a, runtime);
 				case SUP_TAG:
 					if (a->label == b->label){
-						return cancel(a,b, stack, stack_top);
+						return cancel(a,b, runtime);
 					}
-					return commute(a,b, stack, stack_top);
+				case LAM_TAG: return commute(a,b, runtime);
 			}
 		case NULL_TAG:
 		case LAM_TAG:
 		case SUP_TAG:
 			switch (b->tag){
-				case ERA_TAG:
-				case APP_TAG:
-				case DUP_TAG:
-					return interact(b, a, stack, stack_top);
+				case ERA_TAG:case APP_TAG:case DUP_TAG:
+					return interact(b, a, runtime);
 			}
 	}
 	printf("ERROR: Invalid interaction %s -> %s\n", rep_node(a), rep_node(b));
 	return 1;
 }
 
-int reduce(void** stack, int* stack_top){
+int reduce(Runtime* runtime){
 
-	(*stack_top)--;
-	struct node* a = (struct node*)stack[*stack_top];
-	struct node* b = a->main.location;
+	runtime->stack_top--;
+	struct Node* a = (struct Node*)runtime->stack[runtime->stack_top];
+	struct Node* b = a->main.location;
 
-	return interact(a, b, stack, stack_top);
+	return interact(a, b, runtime);
 }
 
 
 
 struct port era(void){
-	struct node* node = new_node(ERA_TAG);
+	struct Node* Node = new_node(ERA_TAG);
 	return (struct port){
-		.location = node,
+		.location = Node,
 		.port_number = 0
 	};
 }
 
 struct port null(void){
-	struct node* node = new_node(NULL_TAG);
+	struct Node* Node = new_node(NULL_TAG);
 	return (struct port){
-		.location = node,
+		.location = Node,
 		.port_number = 0
 	};
 }
 
-struct port bin(struct port a, struct port b, char tag){
-	struct node* dup = new_node(tag);
-	connect_nodes(dup, a.location, 1, a.port_number, NULL, NULL);
-	connect_nodes(dup, b.location, 2, b.port_number, NULL, NULL);
-	return (struct port){
-		.location = dup,
-		.port_number = 0
-	};
+Port mk_port(Node* Node, char port_number){
+	return (Port){.location = Node, .port_number = port_number};
+}
+
+Port mk_main(Node* Node){
+	return mk_port(Node, 0);
+}
+
+Port bin(Port a, Port b, char tag){
+	Node* node = new_node(tag);
+	add_auxs(node, a, b);
+	return mk_main(node);
 }
 
 struct port dup(struct port a, struct port b, char label){
@@ -334,30 +424,9 @@ struct port sup(struct port a, struct port b, char label){
 	return r;
 }
 
-int build_era_sup_null_null(void** stack, int* stack_top){
-	struct port e = era();
-	struct port a = null();
-	struct port b = null();
-	struct port d = sup(a, b, 0);
-	connect_ports(e, d, stack, stack_top);
-	return 0;
-}
-
-int build_dup0_era_era_sup0_null_null(void** stack, int* stack_top){
-	struct port dee = dup(era(), era(), 0);
-	struct port snn = sup(null(), null(), 0);
-	connect_ports(dee, snn, stack, stack_top);
-	return 0;
-}
-
-int build_dup0_era_era_sup1_null_null(void** stack, int* stack_top){
-	connect_ports(dup(era(), era(), 0), sup(null(), null(), 1), stack, stack_top);
-	return 0;
-}
-
-int execute_stack(void** stack, int* stack_top, int* interaction_count){
-	while (*stack_top > 0){
-		if (reduce(stack, stack_top)){
+int execute_stack(Runtime* runtime, int* interaction_count){
+	while (runtime->stack_top > 0){
+		if (reduce(runtime)){
 			return 1;
 		}
 		(*interaction_count)++;
@@ -365,26 +434,147 @@ int execute_stack(void** stack, int* stack_top, int* interaction_count){
 	return 0;
 }
 
-int run_test(int (*a)(void** stack, int* stack_top)){
-	void ** stack = malloc(sizeof(void*) * STACK_SIZE);
-	int stack_top = 0;
-	int interaction_count = 0;
+struct test_error{
+	char* test_name;
+	char* error_message;
+	struct test_error* next;
+};
 
-	a(stack, &stack_top);
-	printf("Node count: %d\n", node_count);
-	execute_stack(stack, &stack_top, &interaction_count);
-	printf("Node count: %d\n", node_count);
-	printf("Interaction count: %d\n", interaction_count);
-	free(stack);
-	return 0;
+
+struct test_error* test_errors = NULL;
+
+
+
+Port mk_aux_1(Node* Node){
+	return mk_port(Node, 1);
 }
 
+Port mk_aux_2(Node* Node){
+	return mk_port(Node, 2);
+}
+
+Port var(Port lam){
+	if (lam.location->tag != LAM_TAG){
+		printf("Error: Node is not a lambda\n");
+	}
+	return (Port){.location = lam.location, .port_number = 1};
+}
+
+Port mk_lam(void){
+	return mk_main(new_node(LAM_TAG));
+}
+
+int add_return(struct port a, struct port b){
+	return add_aux(a.location, 2, b);
+}
+
+Port mk_app(Port fn, Port arg, Runtime* runtime){
+	Node * app = new_node(APP_TAG);
+	add_aux(app, 1, arg);
+	connect_ports(fn, mk_main(app), runtime);
+	return mk_aux_2(app);
+}
+
+Port mk_id(void){
+	Port lam = mk_lam();
+	add_return(lam, var(lam));
+	return lam;
+}
+
+Port church_true(void){
+	Port lam = mk_lam();
+	Port bod = mk_lam();
+	add_return(bod, var(lam));
+	connect_ports(var(bod), era(), NULL);
+	return lam;
+}
+
+Port church_false(void){
+	Port lam = mk_lam();
+	add_auxs(lam.location, era(), mk_id());
+	return lam;
+}
+
+Port church_zero(void){
+	return church_false();
+}
+
+Port var_dup(Port* port){
+	Node* dup = new_node(DUP_TAG);
+	dup->main.location = port->location;
+	dup->main.port_number = port->port_number;
+	port->location = dup;
+	port->port_number = 1;
+	return (Port){.location = dup, .port_number = 2};
+}
+
+Port church_one(Runtime* runtime){
+	Port flam = mk_lam();
+	Port xlam = mk_lam();
+	add_return(flam, xlam);
+	add_return(xlam, mk_app(var(flam), var(xlam), runtime));
+	return flam;
+}
+
+Port church_two(Runtime* runtime){
+	Port flam = mk_lam();
+	Port xlam = mk_lam();
+	Port f = var(flam);
+	Port f2 = var_dup(&f);
+	add_return(flam, xlam);
+	Port inner_app = mk_app(f2, var(xlam), runtime);
+	add_return(xlam, mk_app(f, inner_app, runtime));
+	return flam;
+}
+
+
+Node* var_binder(Port var){
+	Node* node = var.location;
+	switch (node->tag){
+		case LAM_TAG:
+			return node;
+		case DUP_TAG:
+			return var_binder(node->main);
+	}
+	printf("Error: cant find var binder in %s\n", rep_node(node));
+	return NULL;
+}
+
+int var_depth(Node* lam, Port bod){
+
+	Node* node = bod.location;
+	switch (node->tag){
+		case LAM_TAG:
+			if (lam == node){
+				return 0;
+			}
+			return 1 + var_depth(lam, node->main);
+		case APP_TAG:
+			return var_depth(lam, node->aux2);
+	}
+	printf("Error: cant find var depth in %s\n", rep_node(node));
+	return 1;
+}
+
+int print_node(Port port){
+	Node* node = port.location;
+	switch (node->tag){
+		case LAM_TAG:
+			printf("LAM");
+	}
+	printf("Error: cant print node %s\n", rep_node(node));
+	return 1;
+}
+
+
 int main(void) {
-	printf("Running test build_era_sup_null_null\n");
-	run_test(build_era_sup_null_null);
-	printf("Running test build_dup_era_era_sup_null_null\n");
-	run_test(build_dup0_era_era_sup0_null_null);
-	printf("Running test build_dup0_era_era_sup1_null_null\n");
-	run_test(build_dup0_era_era_sup1_null_null);
+	Runtime runtime = fresh_runtime();	
+	Port two = church_two(&runtime);
+
+	// print_node(two);
+	free_runtime(&runtime);
+	
+
+
 	return 0;
 }
