@@ -484,6 +484,7 @@ Port mk_id(void){
 Port church_true(void){
 	Port lam = mk_lam();
 	Port bod = mk_lam();
+	add_return(lam, bod);
 	add_return(bod, var(lam));
 	connect_ports(var(bod), era(), NULL);
 	return lam;
@@ -512,7 +513,9 @@ Port church_one(Runtime* runtime){
 	Port flam = mk_lam();
 	Port xlam = mk_lam();
 	add_return(flam, xlam);
-	add_return(xlam, mk_app(var(flam), var(xlam), runtime));
+	Port f = var(flam);
+	Port x = var(xlam);
+	add_return(xlam, mk_app(f, x, runtime));
 	return flam;
 }
 
@@ -528,52 +531,75 @@ Port church_two(Runtime* runtime){
 }
 
 
-Node* var_binder(Port var){
-	Node* node = var.location;
-	switch (node->tag){
-		case LAM_TAG:
-			return node;
-		case DUP_TAG:
-			return var_binder(node->main);
+
+
+int lam_depth(Node* node){
+	if (node->main.location == NULL){
+		return 0;
 	}
-	printf("Error: cant find var binder in %s\n", rep_node(node));
-	return NULL;
-}
-
-int var_depth(Node* lam, Port bod){
-
-	Node* node = bod.location;
-	switch (node->tag){
+	switch (node->main.location->tag){
 		case LAM_TAG:
-			if (lam == node){
-				return 0;
-			}
-			return 1 + var_depth(lam, node->main);
+			return 1 + lam_depth(node->main.location);
 		case APP_TAG:
-			return var_depth(lam, node->aux2);
+			return lam_depth(node->aux2.location);
 	}
-	printf("Error: cant find var depth in %s\n", rep_node(node));
-	return 1;
+	printf("Error: cant find lam depth in %s\n", rep_node(node));
+	return 10000;
 }
 
-int print_node(Port port){
+
+int do_print_term(Port port, int depth){
+
+	if (get_polarity(port.location->tag, port.port_number) == 1){
+		printf("ERROR: positive port is not a term: %s.%d\n", rep_node(port.location), port.port_number);
+	}
+	
 	Node* node = port.location;
 	switch (node->tag){
 		case LAM_TAG:
-			printf("LAM");
+			if (port.port_number == 1){
+				int myd = lam_depth(node);
+				printf("x%d ", depth - myd - 1);
+				return 0;
+			}
+			printf("λ ");
+			do_print_term(node->aux2, depth + 1);
+			return 0;
+		case APP_TAG:
+			printf("(");
+			do_print_term(node->main, depth );
+			do_print_term(node->aux1, depth );
+			printf(") ");
+			return 0;
+		case DUP_TAG:
+			do_print_term(node->main, depth );
+			return 0;
+		case NULL_TAG:
+			printf("NULL ");
+			return 0;
 	}
 	printf("Error: cant print node %s\n", rep_node(node));
 	return 1;
 }
 
+int print_node(Port port){
+	do_print_term(port, 0);
+	printf("\n");
+	return 0;
+}
+
 
 int main(void) {
 	Runtime runtime = fresh_runtime();	
-	Port two = church_two(&runtime);
+	print_node(null());
+	print_node(mk_id());
 
-	// print_node(two);
-	free_runtime(&runtime);
-	
+
+	print_node(church_false());
+	print_node(church_true());
+	print_node(church_one(&runtime));
+	print_node(church_two(&runtime));
+	free_runtime(&runtime);	
 
 
 	return 0;
