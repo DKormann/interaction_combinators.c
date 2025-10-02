@@ -4,11 +4,11 @@ build/
 *.o
 *.d
 
+
 # macOS
 .DS_Store
 
 # Misc
 tags
 compile_commands.json
-
-
+temp/
