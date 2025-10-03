@@ -434,15 +434,6 @@ int execute_stack(Runtime* runtime, int* interaction_count){
 	return 0;
 }
 
-struct test_error{
-	char* test_name;
-	char* error_message;
-	struct test_error* next;
-};
-
-
-struct test_error* test_errors = NULL;
-
 
 
 Port mk_aux_1(Node* Node){
@@ -548,59 +539,133 @@ int lam_depth(Node* node){
 }
 
 
-int do_print_term(Port port, int depth){
+char* string_malloc(char* a){
+	char* result = malloc(strlen(a) + 1);
+	strcpy(result, a);
+	return result;
+}
 
-	if (get_polarity(port.location->tag, port.port_number) == 1){
-		printf("ERROR: positive port is not a term: %s.%d\n", rep_node(port.location), port.port_number);
-	}
-	
-	Node* node = port.location;
-	switch (node->tag){
+char* string_concat(char* a, char* b){
+	int len_a = strlen(a);
+	int len_b = strlen(b);
+	char* result = malloc(len_a + len_b + 1);
+	strcpy(result, a);
+	strcpy(result + len_a, b);
+	free(a);
+	free(b);
+	return result;
+}
+
+
+char* do_format_term(Port port, int depth){
+	switch (port.location->tag){
 		case LAM_TAG:
 			if (port.port_number == 1){
-				int myd = lam_depth(node);
-				printf("x%d ", depth - myd - 1);
-				return 0;
+				int myd = lam_depth(port.location);
+				{
+					char buf[32];
+					snprintf(buf, sizeof(buf), "x%d", depth - myd - 1);
+					return string_malloc(buf);
+				}
 			}
-			printf("λ ");
-			do_print_term(node->aux2, depth + 1);
-			return 0;
-		case APP_TAG:
-			printf("(");
-			do_print_term(node->main, depth );
-			do_print_term(node->aux1, depth );
-			printf(") ");
-			return 0;
+			return string_concat(string_malloc("λ "),  do_format_term(port.location->aux2, depth + 1));
+		case APP_TAG:{
+				char* sa = do_format_term(port.location->main, depth);
+				char* sb = do_format_term(port.location->aux1, depth);
+				char* buf = malloc(strlen(sa) + strlen(sb) + 3);
+				sprintf(buf, "(%s %s)", sa, sb);
+				free(sa);
+				free(sb);
+				return buf;
+			}
 		case DUP_TAG:
-			do_print_term(node->main, depth );
-			return 0;
+		  return do_format_term(port.location->main, depth);
 		case NULL_TAG:
-			printf("NULL ");
-			return 0;
+			return string_malloc("NULL");
 	}
-	printf("Error: cant print node %s\n", rep_node(node));
-	return 1;
+	return string_malloc("UNKOWN TERM");
 }
 
-int print_node(Port port){
-	do_print_term(port, 0);
-	printf("\n");
+char* format_term(Port port){
+	return do_format_term(port, 0);
+}
+
+
+typedef struct test_error{
+	char* error_message;
+	struct test_error* next;
+} test_error;
+
+struct test_error* test_errors = NULL;
+
+
+int add_test_error(char* error_message){
+	struct test_error* new_error = malloc(sizeof(struct test_error));
+	char* error_message_copy = malloc(strlen(error_message) + 1);
+	strcpy(error_message_copy, error_message);
+	new_error->error_message = error_message_copy;
+	new_error->next = test_errors;
+	test_errors = new_error;
 	return 0;
 }
+
+
+
+int assert_string_equal(char* a, char* b){
+  if (strcmp(a, b) != 0){
+		char error_template[] = "Expected %s to be equal to %s";
+		char* error_message = malloc(strlen(error_template) + strlen(a) + strlen(b) + 1);
+		sprintf(error_message, error_template, a, b);
+		add_test_error(error_message);
+		return 1;
+	}
+	return 0;
+}
+
+int assert_format(Port port, char* expected){
+	char* formatted = format_term(port);
+	assert_string_equal(formatted, expected);
+	free(formatted);
+	return 0;
+}
+
+
+int test_format(Runtime* runtime){
+	Port zero = church_zero();
+	assert_format(zero, "λ λ x0");
+	assert_format(null(), "NULL");
+	assert_format(church_true(), "λ λ x1");
+	assert_format(church_false(), "λ λ x0");
+	assert_format(church_one(runtime), "λ λ (x1 x0)");
+	assert_format(church_two(runtime), "λ λ (x1 (x1 x0))");
+	return 0;
+}
+
+
+int run_tests(void){
+	Runtime runtime = fresh_runtime();
+	test_format(&runtime);
+	free_runtime(&runtime);
+	if (test_errors != NULL){
+		while (test_errors != NULL){
+			printf("%s\n", test_errors->error_message);
+			test_error* current = test_errors->next;
+			free(test_errors->error_message);
+			free(test_errors);
+			test_errors = current;
+		}
+		return 1;
+	}
+	return 0;
+}
+
+
 
 
 int main(void) {
-	Runtime runtime = fresh_runtime();	
-	print_node(null());
-	print_node(mk_id());
-
-
-	print_node(church_false());
-	print_node(church_true());
-	print_node(church_one(&runtime));
-	print_node(church_two(&runtime));
-	free_runtime(&runtime);	
+	run_tests();
 
 
 	return 0;
+
 }
