@@ -43,12 +43,13 @@ SUP:
 
 
 
-#define ERA_TAG 0
 #define NULL_TAG 1
 #define LAM_TAG 2
 #define APP_TAG 3
 #define DUP_TAG 4
 #define SUP_TAG 5
+#define ERA_TAG 6
+#define ROOT_TAG 7
 
 int node_count = 0;
 
@@ -126,24 +127,36 @@ char get_polarity(char tag, char port_number){
 	}
 }
 
-char* rep_node(struct Node* Node){
-	switch (get_tag(Node)){
-		case ERA_TAG:
-			return "<Era Node %p>";
-		case NULL_TAG:
-			return "<Null Node %p>";
-		case LAM_TAG:
-			return "<Lam Node %p>";
-		case APP_TAG:
-			return "<App Node %p>";
-		case DUP_TAG:
-			return "<Dup Node %p>";
-		case SUP_TAG:
-			return "<Sup Node %p>";
-		default:
-			return "<Unknown Node %p>";
+char* tag_name(Node* node){
+	if (node == NULL){
+		return "ERR";
 	}
-	return "<Unknown Node %p>";
+	switch (node->tag){
+		case ERA_TAG:
+			return "Era";
+		case NULL_TAG:
+			return "Nul";
+		case LAM_TAG:
+			return "Lam";
+		case APP_TAG:
+			return "App";
+		case DUP_TAG:
+			return "Dup";
+		case SUP_TAG:
+			return "Sup";
+		case ROOT_TAG:
+			return "Root";
+	}
+	return "UNK";
+}
+
+char* format_node(struct Node* Node){
+	if (Node == NULL){
+		return "NULL";
+	}
+	char* buf = malloc(30);
+	sprintf(buf, "<%s: %s %s %s>", tag_name(Node), tag_name(Node->main.location), tag_name(Node->aux1.location), tag_name(Node->aux2.location));
+	return buf;
 }
 
 struct Node* new_node(char tag){
@@ -159,6 +172,49 @@ void free_node(struct Node* Node){
 	free(Node);
 }
 
+
+Port* get_port(struct Node* Node, char port_number){
+	switch (port_number){
+		case 0:
+			return &Node->main;
+		case 1:
+			return &Node->aux1;
+		case 2:
+			return &Node->aux2;
+	}
+	printf("Error: Invalid port number %d\n", port_number);
+	return NULL;
+}
+
+
+
+void free_term(Port port){
+	Node* node = port.location;
+	switch (node->tag){
+		case LAM_TAG:
+			if (port.port_number == 1){
+				return;
+			}
+			free_term(node->aux2);
+			break;
+		case APP_TAG:
+			free_term(node->main);
+			free_term(node->aux1);
+			break;
+		case DUP_TAG:
+			get_port(node, port.port_number)->location = NULL;
+			char other_port_number = 3 - port.port_number;
+			if (get_port(node, other_port_number)->location == NULL){
+				break;
+			}else{
+				return;
+			}	
+	}
+	free_node(node);
+	return;
+
+}
+
 char arity(char tag){
 	if (tag == ERA_TAG || tag == NULL_TAG){
 		return 1;
@@ -169,7 +225,7 @@ char arity(char tag){
 int set_port(struct Node* Node, char port_number, void* location, char target_port_number){
 
 	if (arity(Node->tag) == 1 && port_number > 0){
-		printf("Error: Cannot set port %d to Node %s\n", port_number, rep_node(Node));
+		printf("Error: Cannot set port %d to Node %s\n", port_number, format_node(Node));
 		return 1;
 	};
 
@@ -198,7 +254,7 @@ int set_port(struct Node* Node, char port_number, void* location, char target_po
 
 int connect_nodes(struct Node* a, struct Node* b, char an, char bn, Runtime* runtime){
 	if (get_polarity(a->tag, an) == get_polarity(b->tag, bn)){
-		printf("Error: Polarities do not match for ports %s.%d and %s.%d\n", rep_node(a), an, rep_node(b), bn);
+		printf("Error: Polarities do not match for ports %s.%d and %s.%d\n", format_node(a), an, format_node(b), bn);
 		return 1;
 	}
 	if (set_port(a, an, b, bn)){
@@ -233,6 +289,9 @@ int add_auxs(struct Node* Node, struct port a, struct port b){
 }
 
 
+
+
+
 int annihilate(struct Node* a, struct Node* b){
 	free_node(a);
 	free_node(b);
@@ -263,7 +322,7 @@ int commute(struct Node* a, struct Node* b, Runtime* runtime){
 	return 0;
 }
 
-int cancel(struct Node* a, struct Node* b, Runtime* runtime){
+int anihilate(struct Node* a, struct Node* b, Runtime* runtime){
 	connect_nodes(a->aux1.location, b->aux1.location, a->aux1.port_number, b->aux1.port_number, runtime);
 	connect_nodes(a->aux2.location, b->aux2.location, a->aux2.port_number, b->aux2.port_number, runtime);
 	free_node(a);
@@ -281,18 +340,6 @@ typedef enum {
 } node_type;
 
 
-Port* get_port(struct Node* Node, char port_number){
-	switch (port_number){
-		case 0:
-			return &Node->main;
-		case 1:
-			return &Node->aux1;
-		case 2:
-			return &Node->aux2;
-	}
-	printf("Error: Invalid port number %d\n", port_number);
-	return NULL;
-}
 
 int check_port(Node* location, char port_number){
 
@@ -317,7 +364,7 @@ int check_node(struct Node* Node){
 
 	for (int i = 0; i < get_arity(Node->tag); i++){
 		if (check_port(Node, i)){
-			printf("Error: Invalid port %d for Node %s\n", i, rep_node(Node));
+			printf("Error: Invalid port %d for Node %s\n", i, format_node(Node));
 			return 1;
 		}
 	}
@@ -325,60 +372,6 @@ int check_node(struct Node* Node){
 
 }
 
-int interact(struct Node* a, struct Node* b, Runtime* runtime){
-
-	if (check_node(a)){
-		return 1;
-	}
-	if (check_node(b)){
-		return 1;
-	}
-
-	switch (a->tag){
-		case ERA_TAG:
-			switch (b->tag){
-				case NULL_TAG:return annihilate(a, b);
-				case LAM_TAG:
-					if (b->aux1.location == b->aux2.location){
-						return annihilate(a,b);
-					}
-				case SUP_TAG: return erase(a, b, runtime);
-			}
-		case APP_TAG:
-			switch (b->tag){
-				case NULL_TAG: return erase(b, a, runtime);
-				case LAM_TAG: return cancel(a,b, runtime);
-				case SUP_TAG: return commute(a,b, runtime);
-			}
-		case DUP_TAG:
-			switch (b->tag){
-				case NULL_TAG: return erase(b, a, runtime);
-				case SUP_TAG:
-					if (a->label == b->label){
-						return cancel(a,b, runtime);
-					}
-				case LAM_TAG: return commute(a,b, runtime);
-			}
-		case NULL_TAG:
-		case LAM_TAG:
-		case SUP_TAG:
-			switch (b->tag){
-				case ERA_TAG:case APP_TAG:case DUP_TAG:
-					return interact(b, a, runtime);
-			}
-	}
-	printf("ERROR: Invalid interaction %s -> %s\n", rep_node(a), rep_node(b));
-	return 1;
-}
-
-int reduce(Runtime* runtime){
-
-	runtime->stack_top--;
-	struct Node* a = (struct Node*)runtime->stack[runtime->stack_top];
-	struct Node* b = a->main.location;
-
-	return interact(a, b, runtime);
-}
 
 
 
@@ -392,6 +385,14 @@ struct port era(void){
 
 struct port null(void){
 	struct Node* Node = new_node(NULL_TAG);
+	return (struct port){
+		.location = Node,
+		.port_number = 0
+	};
+}
+
+struct port root(void){
+	struct Node* Node = new_node(ROOT_TAG);
 	return (struct port){
 		.location = Node,
 		.port_number = 0
@@ -424,15 +425,6 @@ struct port sup(struct port a, struct port b, char label){
 	return r;
 }
 
-int execute_stack(Runtime* runtime, int* interaction_count){
-	while (runtime->stack_top > 0){
-		if (reduce(runtime)){
-			return 1;
-		}
-		(*interaction_count)++;
-	}
-	return 0;
-}
 
 
 
@@ -495,8 +487,14 @@ Port var_dup(Port* port){
 	Node* dup = new_node(DUP_TAG);
 	dup->main.location = port->location;
 	dup->main.port_number = port->port_number;
+
+	Port* other_port = get_port(port->location, port->port_number);
+	other_port->location = dup;
+	other_port->port_number = 0;
+
 	port->location = dup;
 	port->port_number = 1;
+
 	return (Port){.location = dup, .port_number = 2};
 }
 
@@ -513,11 +511,13 @@ Port church_one(Runtime* runtime){
 Port church_two(Runtime* runtime){
 	Port flam = mk_lam();
 	Port xlam = mk_lam();
+
 	Port f = var(flam);
 	Port f2 = var_dup(&f);
+
 	add_return(flam, xlam);
-	Port inner_app = mk_app(f2, var(xlam), runtime);
-	add_return(xlam, mk_app(f, inner_app, runtime));
+	Port inner_app = mk_app(f , var(xlam), runtime);
+	add_return(xlam, mk_app(f2, inner_app, runtime));
 	return flam;
 }
 
@@ -525,16 +525,25 @@ Port church_two(Runtime* runtime){
 
 
 int lam_depth(Node* node){
-	if (node->main.location == NULL){
+	if (node == NULL){
 		return 0;
 	}
-	switch (node->main.location->tag){
+
+	switch (node->tag){
 		case LAM_TAG:
+			if (node->main.location == NULL){
+				return 0;
+			}
 			return 1 + lam_depth(node->main.location);
 		case APP_TAG:
+			if (node->aux2.location == NULL){
+				return 0;
+			}
 			return lam_depth(node->aux2.location);
+		case ROOT_TAG:
+			return 0;
 	}
-	printf("Error: cant find lam depth in %s\n", rep_node(node));
+	printf("Error: cant find lam depth in %s\n", format_node(node));
 	return 10000;
 }
 
@@ -557,6 +566,7 @@ char* string_concat(char* a, char* b){
 }
 
 
+
 char* do_format_term(Port port, int depth){
 	switch (port.location->tag){
 		case LAM_TAG:
@@ -564,12 +574,14 @@ char* do_format_term(Port port, int depth){
 				int myd = lam_depth(port.location);
 				{
 					char buf[32];
-					snprintf(buf, sizeof(buf), "x%d", depth - myd - 1);
+					snprintf(buf, sizeof(buf), "x%d", depth - myd);
 					return string_malloc(buf);
 				}
 			}
-			return string_concat(string_malloc("λ "),  do_format_term(port.location->aux2, depth + 1));
+			char* aux2 = do_format_term(port.location->aux2, depth + 1);
+			return string_concat(string_malloc("λ "),  aux2);
 		case APP_TAG:{
+				printf("app tag\n");
 				char* sa = do_format_term(port.location->main, depth);
 				char* sb = do_format_term(port.location->aux1, depth);
 				char* buf = malloc(strlen(sa) + strlen(sb) + 3);
@@ -579,16 +591,91 @@ char* do_format_term(Port port, int depth){
 				return buf;
 			}
 		case DUP_TAG:
+			printf("dup tag\n");
 		  return do_format_term(port.location->main, depth);
 		case NULL_TAG:
+			printf("null tag\n");
 			return string_malloc("NULL");
 	}
 	return string_malloc("UNKOWN TERM");
 }
 
+
 char* format_term(Port port){
 	return do_format_term(port, 0);
 }
+
+
+
+int interact(struct Node* a, struct Node* b, Runtime* runtime){
+	printf("interact: %s -> %s\n", format_node(a), format_node(b));
+	if (check_node(a)){
+		return 1;
+	}
+	if (check_node(b)){
+		return 1;
+	}
+
+	switch (a->tag){
+		case ERA_TAG:
+			switch (b->tag){
+				case NULL_TAG:return annihilate(a, b);
+				case LAM_TAG:
+					if (b->aux1.location == b->aux2.location){
+						return annihilate(a,b);
+					}
+				case SUP_TAG: return erase(a, b, runtime);
+			}
+		case APP_TAG:
+			switch (b->tag){
+				case NULL_TAG: return erase(b, a, runtime);
+				case LAM_TAG: return anihilate(a,b, runtime);
+				case SUP_TAG: return commute(a,b, runtime);
+			}
+		case DUP_TAG:
+			switch (b->tag){
+				case NULL_TAG: return erase(b, a, runtime);
+				case SUP_TAG:
+					if (a->label == b->label){
+						return anihilate(a,b, runtime);
+					}
+				case LAM_TAG: return commute(a,b, runtime);
+			}
+		case NULL_TAG:
+		case LAM_TAG:
+		case SUP_TAG:
+			switch (b->tag){
+				case ERA_TAG:case APP_TAG:case DUP_TAG:
+					return interact(b, a, runtime);
+			}
+	}
+	printf("ERROR: Invalid interaction %s -> %s\n", format_node(a), format_node(b));
+	return 1;
+}
+
+int reduce(Runtime* runtime){
+
+	runtime->stack_top--;
+	struct Node* a = (struct Node*)runtime->stack[runtime->stack_top];
+	struct Node* b = a->main.location;
+
+	return interact(a, b, runtime);
+}
+
+
+
+int execute_stack(Runtime* runtime, int* interaction_count){
+	while (runtime->stack_top > 0){
+		if (reduce(runtime)){
+			return 1;
+		}
+		(*interaction_count)++;
+	}
+	return 0;
+}
+
+
+
 
 
 typedef struct test_error{
@@ -642,9 +729,23 @@ int test_format(Runtime* runtime){
 }
 
 
+
+int test_free_term(Runtime* runtime){
+	(node_count) = 0;
+	Port term = church_two(runtime);
+	free_term(term);
+	if (node_count != 0){
+		add_test_error("Node count is not 0 after free_term");
+		return 1;
+	}
+	return 0;
+}
+
+
 int run_tests(void){
 	Runtime runtime = fresh_runtime();
 	test_format(&runtime);
+	test_free_term(&runtime);
 	free_runtime(&runtime);
 	if (test_errors != NULL){
 		while (test_errors != NULL){
@@ -663,9 +764,22 @@ int run_tests(void){
 
 
 int main(void) {
-	run_tests();
 
+	// run_tests();
 
+	Runtime runtime = fresh_runtime();
+
+	Port term = mk_app(mk_id(), mk_id(), &runtime);
+
+	connect_ports(root(), term, &runtime);
+	printf("term: %s\n", format_term(term));
+	
+
+	int interaction_count = 0;
+	execute_stack(&runtime, &interaction_count);
+
+	printf("term: %s\n", format_term(term));
 	return 0;
+
 
 }
