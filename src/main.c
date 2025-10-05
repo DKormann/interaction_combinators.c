@@ -97,7 +97,8 @@ void free_runtime(Runtime* runtime){
 
 
 
-void push(void* value, Runtime* runtime){
+
+void push_redex(void* value, Runtime* runtime){
 	runtime->stack[runtime->stack_top] = value;
 	runtime->stack_top++;
 }
@@ -123,9 +124,9 @@ char get_polarity(char tag, char port_number){
 	switch (tag){
 		case Node_Type_Era:
 		case Node_Type_Root:
-		case Node_Intermidiate_Var:
-			return 1;
+		return 1;
 		case Node_Type_Null:
+		case Node_Intermidiate_Var:
 			return -1;
 		case Node_Type_Lam:
 			return port_number == 2 ? 1 : -1;
@@ -296,8 +297,7 @@ int connect_nodes(struct Node* a, struct Node* b, char an, char bn, Runtime* run
 		return 1;
 	}
 	if (an == 0 && bn == 0 && a->tag != Node_Type_Root && b->tag != Node_Type_Root){
-		printf("pushing %s->%s\n", format_node(a), format_node(b));
-		push(a, runtime);
+		push_redex(a, runtime);
 	}
 	return 0;
 }
@@ -368,7 +368,7 @@ int check_port(Port port){
 int check_node(struct Node* Node){
 
 	if (Node->tag == 0){
-		printf("Error: Invalid tag");
+		printf("Check Node Error: Invalid tag");
 		return 1;
 	}
 	if (Node->main.location == NULL){
@@ -573,7 +573,9 @@ char* do_format_term(Port port, name_ctx* ctx){
 			return string_malloc("&{}");
 		case Node_Type_Null:
 			return string_malloc("NULL");
-		default: return string_malloc("UNK");
+		
+		// default: return string_malloc("UNK");
+
 	}
 	// return string_malloc("UNKOWN TERM");
 	// return 
@@ -665,6 +667,7 @@ int dup_lam(struct Node* dup, struct Node* lam, Runtime* runtime){
 
 int anihilate(struct Node* a, struct Node* b, Runtime* runtime){
 
+	// printf("anihilate: %s -> %s\n", format_node(a), format_node(b));
 	connect_nodes(a->aux1.location, b->aux1.location, a->aux1.port_number, b->aux1.port_number, runtime);
 	connect_nodes(a->aux2.location, b->aux2.location, a->aux2.port_number, b->aux2.port_number, runtime);
 	free_node(a);
@@ -695,12 +698,10 @@ int interact(struct Node* a, struct Node* b, Runtime* runtime){
 				default: break;
 			}
 		}
-		default:
-			printf("Error: Invalid node %s\n", format_node(a));
-			return 1;
+		default:break;
 	}
 	
-	printf("interact: %s -> %s\n", format_node(a), format_node(b));
+	// printf("interact: %s -> %s\n", format_node(a), format_node(b));
 
 	switch (a->tag){
 		case Node_Type_Era:
@@ -747,7 +748,12 @@ int reduce(Runtime* runtime){
 	struct Node* a = (struct Node*)runtime->stack[runtime->stack_top];
 	struct Node* b = a->main.location;
 
-	return interact(a, b, runtime);
+	int res = interact(a, b, runtime);
+	if (res){
+		printf("Reduce Error\n");
+	}
+
+	return res;
 }
 
 
@@ -755,8 +761,10 @@ int reduce(Runtime* runtime){
 int execute_stack(Runtime* runtime, int* interaction_count){
 	while (runtime->stack_top > 0){
 		if (reduce(runtime)){
+			printf("Reduce Error\n");
 			return 1;
 		}
+
 		(*interaction_count)++;
 	}
 	return 0;
@@ -889,12 +897,15 @@ int test_format(Runtime* runtime){
 
 
 int assert_reduction(Port term, char* expected, Runtime* runtime){
-	mk_root(term, runtime);
+	Port rt = mk_root(term, runtime);
 	int interaction_count = 0;
-	printf("assert_reduction: %s -> %s\n", format_term(term), expected);
+	// printf("assert_reduction: %s -> %s\n", format_term(term), expected);
 	execute_stack(runtime, &interaction_count);
-	printf("assert_reduction: %s\n", format_term(term));
-	assert_format(term, expected);
+
+	char * res = format_term(other_port(rt));
+	// printf("assert_reduction: %s\n", res);
+	free(res);
+	assert_format(other_port(rt), expected);
 	return 0;
 }
 
