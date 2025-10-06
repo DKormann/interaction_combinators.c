@@ -85,22 +85,17 @@ typedef struct Runtime{
 	int stack_top;
 } Runtime;
 
-Runtime fresh_runtime(void){
-	return (Runtime){.stack = malloc(sizeof(Node*) * STACK_SIZE), .stack_top = 0};
+Node* stack[1000];
+Runtime runtime = (Runtime){.stack = stack, .stack_top = 0};
+
+void fresh_runtime(void){
+	runtime.stack = stack;
+	runtime.stack_top = 0;
 }
 
-void free_runtime(Runtime* runtime){
-	free(runtime->stack);
-	// free(runtime);
-}
-
-
-
-
-
-void push_redex(void* value, Runtime* runtime){
-	runtime->stack[runtime->stack_top] = value;
-	runtime->stack_top++;
+void push_redex(void* value){
+	runtime.stack[runtime.stack_top] = value;
+	runtime.stack_top++;
 }
 
 
@@ -113,6 +108,7 @@ char get_arity(char tag){
 		case Node_Type_Era:
 		case Node_Type_Null:
 		case Node_Type_Root:
+		case Node_Intermidiate_Var:
 			return 1;
 		default:
 			return 3;
@@ -514,7 +510,6 @@ char* string_concat(char* a, char* b){
 
 
 
-
 typedef struct name_ctx{
 
 	Node* node;
@@ -772,6 +767,78 @@ void execute_stack(Runtime* runtime, int* interaction_count){
 }
 
 
+
+
+void connect_intermidiate_vars(Port port, name_ctx* ctx){
+
+	// printf("connect_intermidiate_vars: %s\n", format_node(port.location));
+	// printf("port.port_number: %d\n", port.port_number);
+	// printf("ctx NULL: %d\n", ctx == NULL);
+
+	Node* node = port.location;
+
+	switch (node->tag){
+		case Node_Type_Lam:{
+			if (port.port_number != 0){
+				break;
+			}
+			name_ctx* new_ctx = malloc(sizeof(name_ctx));
+			new_ctx->node = node;
+			new_ctx->prev = ctx;
+			connect_intermidiate_vars(node->aux2, new_ctx);
+			free(new_ctx);
+			break;
+		}
+		case Node_Type_App:{
+			if (port.port_number != 2){
+				break;
+			}
+			connect_intermidiate_vars(node->main, ctx);
+			connect_intermidiate_vars(node->aux1, ctx);
+			break;
+		}
+		case Node_Type_Dup:{
+			connect_intermidiate_vars(node->main, ctx);
+		}
+		case Node_Intermidiate_Var:{
+			name_ctx* current = ctx;
+			char ctr = node->label;
+
+			while (current != NULL && ctr > 0){
+				current = current->prev;
+				ctr--;
+			}
+
+			if (current != NULL){
+				replace_port(port, (Port){
+					.location = current->node,
+					.port_number = 1
+				}, NULL);
+			}
+		}
+		default: break;
+	}
+
+}
+
+
+Port lam(Port b){
+	Node* node = new_node(Node_Type_Lam);
+	add_aux(node, 2, b);
+	Port res = mk_main(node);
+	connect_intermidiate_vars(res, NULL);
+	return res;
+}
+
+
+
+Port x(char n){
+	Node* node = new_node(Node_Intermidiate_Var);
+	node->label = n;
+	return mk_main(node);
+}
+
+
 /* BASIC TERMS*/
 
 
@@ -898,8 +965,6 @@ int test_format(Runtime* runtime){
 	return 0;
 }
 
-
-
 int assert_reduction(Port term, char* expected, Runtime* runtime){
 
 	Port rt = mk_root(term, runtime);
@@ -962,7 +1027,19 @@ char* format_root(Port root){
 
 int main(void) {
 
-	run_tests();
+	// run_tests();
+
+	// Port term = lam(x(0));
+	// printf("term: %s\n", format_term(term));
+	// printf("term: %s\n", format_node(term.location));
+
+	Runtime runtime = fresh_runtime();
+
+	printf("term: %s\n", format_term(lam(x(0))));
+	printf("term: %s\n", format_term(lam(lam(x(0)))));
+	printf("term: %s\n", format_term(lam(lam(x(1)))));
+	printf("term: %s\n", format_term(lam(lam(mk_app(x(0), x(1), &runtime)))));
+	// printf("term: %s\n", format_term(lam(x(1))));
 
 
 	return 0;
