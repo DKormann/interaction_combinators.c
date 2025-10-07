@@ -1,0 +1,69 @@
+
+
+
+
+enum list {
+  nil
+  cons(x)
+}
+
+
+
+list x :
+  1 2 3
+
+
+map x 
+  cons x => 
+  nil => 
+
+
+
+
+def foo():
+  def g(): pass
+  map (list,g )
+  map(list, lamb)
+
+
+
+
+
+x = 0;
+
+match x:
+  case 0:
+    0;
+  case 1 + n:
+    n
+
+
+
+class Click{
+
+  constructor( public x){
+
+  }
+}
+
+
+c  = new Click(2)
+
+c.x =
+
+x = 0;
+
+
+
+match x:
+  case 0:
+    0;
+  case f(n):
+    n;
+
+
+
+
+
+
+

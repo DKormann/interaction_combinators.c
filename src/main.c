@@ -162,34 +162,47 @@ char* format_node(struct Node* Node){
 	if (Node == NULL){
 		return "NULL";
 	}
-	char* buf = malloc(100);
+	
+	const char* tag = tag_name(Node);
+	
 	if (get_arity(Node->tag) == 1){
-		sprintf(buf, "<%s: %s>", tag_name(Node), tag_name(Node->main.location));
-	}else{
-
-		char * label;
-
+		const char* main = tag_name(Node->main.location);
+		size_t need = snprintf(NULL, 0, "<%s: %s>", tag, main);
+		char* buf = malloc(need + 1);
+		snprintf(buf, need + 1, "<%s: %s>", tag, main);
+		return buf;
+	} else {
+		const char* main_tag = tag_name(Node->main.location);
+		const char* aux1_tag = tag_name(Node->aux1.location);
+		const char* aux2_tag = tag_name(Node->aux2.location);
+		
+		char label_buf[32] = {0};
+		const char* label = "";
 		if (Node->tag == Node_Type_Dup || Node->tag == Node_Type_Sup){
-			label = malloc(10);
-			sprintf(label, " %d", Node->label);
-		}else{
-			label = "";
+			snprintf(label_buf, sizeof(label_buf), " %d", (int)Node->label);
+			label = label_buf;
 		}
 
-		sprintf(buf, "<%s%s: %s.%d %s.%d %s.%d>",
-			tag_name(Node),
-			label,
-			tag_name(Node->main.location), Node->main.port_number,
-			tag_name(Node->aux1.location), Node->aux1.port_number,
-			tag_name(Node->aux2.location), Node->aux2.port_number);
+		size_t need = snprintf(NULL, 0, "<%s%s: %s.%d %s.%d %s.%d>",
+			tag, label,
+			main_tag, (int)Node->main.port_number,
+			aux1_tag, (int)Node->aux1.port_number,
+			aux2_tag, (int)Node->aux2.port_number);
+		char* buf = malloc(need + 1);
+		snprintf(buf, need + 1, "<%s%s: %s.%d %s.%d %s.%d>",
+			tag, label,
+			main_tag, (int)Node->main.port_number,
+			aux1_tag, (int)Node->aux1.port_number,
+			aux2_tag, (int)Node->aux2.port_number);
+		return buf;
 	}
-	return buf;
 }
 
 char* format_port(struct port Port){
 	char* nodefmt = format_node(Port.location);
-	char* buf = malloc(strlen(nodefmt) + 5);
-	sprintf(buf, "%s.%d", nodefmt, Port.port_number);
+	size_t need = snprintf(NULL, 0, "%s.%d", nodefmt, (int)Port.port_number);
+	char* buf = malloc(need + 1);
+	snprintf(buf, need + 1, "%s.%d", nodefmt, (int)Port.port_number);
 	free(nodefmt);
 	return buf;
 }
@@ -500,29 +513,29 @@ Port app(Port f, Port x){
 
 
 char* string_malloc(char* a){
-	char* result = malloc(strlen(a) + 1);
-	strcpy(result, a);
+	size_t len = strlen(a);
+	char* result = malloc(len + 1);
+	memcpy(result, a, len + 1);
 	return result;
 }
 
 char* string_concat(char* a, char* b){
-	int len_a = strlen(a);
-	int len_b = strlen(b);
+	size_t len_a = strlen(a);
+	size_t len_b = strlen(b);
 	char* result = malloc(len_a + len_b + 1);
-	strcpy(result, a);
-	strcpy(result + len_a, b);
+	memcpy(result, a, len_a);
+	memcpy(result + len_a, b, len_b + 1);
 	free(a);
 	free(b);
 	return result;
 }
 
-
-
 typedef struct name_ctx{
-
 	Node* node;
 	struct name_ctx* prev;
 }name_ctx;
+
+
 
 char* do_format_term(Port port, name_ctx* ctx){
 	switch (port.location->tag){
@@ -551,35 +564,30 @@ char* do_format_term(Port port, name_ctx* ctx){
 			free(new_ctx);
 			return string_concat(string_malloc("λ."),  aux2);
 		}
-		case Node_Type_App:{
-				char* sa = do_format_term(port.location->main, ctx);
-				char* sb = do_format_term(port.location->aux1, ctx);
-				char* buf = malloc(strlen(sa) + strlen(sb) + 3);
-				sprintf(buf, "(%s %s)", sa, sb);
-				free(sa);
-				free(sb);
-				return buf;
-			}
-		case Node_Type_Dup:{
-			char* f0 = do_format_term(port.location->main, ctx);
-			char* buf = malloc(strlen(f0) + 100);
-
-			printf("label: %d\n", port.location->label);
-
-			sprintf(buf, "&%d(%s)", port.location->label, f0);
-			// sprintf(buf, "&%d(%s)", 1234, f0);
-			// printf("buf: %s\n", buf);
-			free(f0);
+	case Node_Type_App:{
+			char* sa = do_format_term(port.location->main, ctx);
+			char* sb = do_format_term(port.location->aux1, ctx);
+			size_t need = snprintf(NULL, 0, "(%s %s)", sa, sb);
+			char* buf = malloc(need + 1);
+			snprintf(buf, need + 1, "(%s %s)", sa, sb);
+			free(sa);
+			free(sb);
 			return buf;
-			// return f0;
 		}
-		case Node_Type_Sup:{
-			// char* buf = malloc(10);
-			// sprintf(buf, "&%d{}", port.location->label);
-			// return buf;
-
-			return string_malloc("&{}");
-		}
+	case Node_Type_Dup:{
+		char* f0 = do_format_term(port.location->main, ctx);
+		size_t need = snprintf(NULL, 0, "&%d(%s)", (int)port.location->label, f0);
+		char* buf = malloc(need + 1);
+		snprintf(buf, need + 1, "&%d(%s)", (int)port.location->label, f0);
+		free(f0);
+		return buf;
+	}
+	case Node_Type_Sup:{
+		size_t need = snprintf(NULL, 0, "&%d{}", (int)port.location->label);
+		char* buf = malloc(need + 1);
+		snprintf(buf, need + 1, "&%d{}", (int)port.location->label);
+		return buf;
+	}
 		case Node_Type_Null:
 			return string_malloc("NULL");
 		case Node_Intermidiate_Var:
@@ -598,6 +606,84 @@ char* do_format_term(Port port, name_ctx* ctx){
 char* format_term(Port port){
 	name_ctx* ctx = NULL;
 	return do_format_term(port, ctx);
+}
+
+
+int ctx_find_node(name_ctx* ctx, Node* node){
+	name_ctx* current = ctx;
+	int ctr = 0;
+	while(current!= NULL){
+		if (node == current->node){
+			return ctr;
+		}
+		ctr++;
+		current = current->prev;
+	}
+	return -1;
+}
+
+int ctx_add_node(name_ctx** ctx, Node* node){
+	name_ctx* new_ctx = malloc(sizeof(name_ctx));
+	new_ctx->node=  node;
+	new_ctx->prev = (*ctx);
+	(*ctx) = new_ctx;
+}
+
+void collect_nodes(Port port, name_ctx** ctx){
+
+	Node* node = port.location;
+
+	if (ctx_find_node(*ctx, node) > -1){
+		return;
+	}
+
+	ctx_add_node(ctx, port.location);
+	collect_nodes(node->main, ctx);
+	if (get_arity(node->tag) == 1){
+		return;
+	}
+	collect_nodes(node->aux1, ctx);
+	collect_nodes(node->aux2, ctx);
+}
+
+
+void print_ctx(name_ctx* current, name_ctx* ctx){
+
+	if (current == NULL){
+		return;
+	}
+
+	char* lab = malloc(10);
+	if (current->node->tag == Node_Type_Dup || current->node->tag == Node_Type_Sup){
+		snprintf(lab, 10, "%d", (int)current->node->label);
+	}else{
+		lab[0] = '\0';
+	}
+
+	printf("%d: <%s %s: %d %d %d>\n", ctx_find_node(ctx, current->node),
+		tag_name(current->node), lab,
+		ctx_find_node(ctx, current->node->main.location),
+		ctx_find_node(ctx, current->node->aux1.location),
+		ctx_find_node(ctx, current->node->aux2.location)
+	);
+	free(lab);
+	print_ctx(current->prev, ctx);
+}
+
+void free_ctx(name_ctx* ctx){
+	if (ctx == NULL){
+		return;
+	}
+	free_ctx(ctx->prev);
+	free(ctx);
+}
+
+
+void print_nodes(Port term){
+	name_ctx* ctx = NULL;
+	collect_nodes(term, &ctx);
+	print_ctx(ctx,ctx);
+	free_ctx(ctx);
 }
 
 
@@ -721,7 +807,7 @@ int interact(struct Node* a, struct Node* b){
 	check_node(a);
 	check_node(b);
 
-	// printf("interact: %s <> %s\n", format_node(a), format_node(b));
+	printf("interact: %s <> %s\n", format_node(a), format_node(b));
 	switch (a->tag){
 		case Node_Type_Era:
 			switch (b->tag){
@@ -878,6 +964,7 @@ Port normalize(Port port){
 		interact(a, b);	
 		interaction_count++;
 		printf("term: %s\n", format_term(other_port(rt)));
+		print_nodes(other_port(rt));
 	}
 	printf("normalize: done\n");
 	return other_port(rt);
@@ -937,8 +1024,9 @@ struct test_error* test_errors = NULL;
 
 int add_test_error(char* error_message){
 	struct test_error* new_error = malloc(sizeof(struct test_error));
-	char* error_message_copy = malloc(strlen(error_message) + 1);
-	strcpy(error_message_copy, error_message);
+	size_t len = strlen(error_message);
+	char* error_message_copy = malloc(len + 1);
+	memcpy(error_message_copy, error_message, len + 1);
 	new_error->error_message = error_message_copy;
 	new_error->next = test_errors;
 	test_errors = new_error;
@@ -948,12 +1036,13 @@ int add_test_error(char* error_message){
 
 int assert_string_equal(char* a, char* b){
   if (strcmp(a, b) != 0){
-		char error_template[] = "Expected %s to be equal to %s";
-		char* error_message = malloc(strlen(error_template) + strlen(a) + strlen(b) + 1);
-		sprintf(error_message, error_template, a, b);
-		add_test_error(error_message);
-		return 1;
-	}
+	char error_template[] = "Expected %s to be equal to %s";
+	size_t need = snprintf(NULL, 0, error_template, a, b);
+	char* error_message = malloc(need + 1);
+	snprintf(error_message, need + 1, error_template, a, b);
+	add_test_error(error_message);
+	return 1;
+}
 	return 0;
 }
 
