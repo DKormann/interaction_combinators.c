@@ -1,42 +1,40 @@
-
-
-
-enum PortType {
-  Main,
-  Aux1,
-  Aux2,
-}
-
-enum NodeType{
+#[derive(Debug)]
+enum Node {
   Era,
   Null,
-  Lam,
-  App,
-  Dup,
-  Sup,
-  Root,
-  IntermediateVar,
+  Lam { body: Box<Node> },
+  Var (Var),
+  App { func: Box<Node>, arg: Box<Node> },
+  Dup1 (Dup1),
+  Dup2 (Dup2),
+  Sup {a: Box<Node>, b: Box<Node>, label: u8},
 }
 
-
-struct Port {
-  location: usize,
-  port_type: PortType,
+#[derive(Debug)]
+struct Var{
+  lam: Box<Node>,
 }
 
-struct Node {
-  node_type: NodeType,
-  main: Port,
-  aux1: Port,
-  aux2: Port,
-  label: char,
+#[derive(Debug)]
+struct Dup2{
+  target: Dup1
 }
 
-
-
-
+#[derive(Debug)]
+struct Dup1{
+  target: Box<Node>
+}
 
 
 fn main() {
-  println!("Hello, world!");
+  let mut node = Node::Lam { body: Box::new(Node::Null) };
+
+  if let Node::Lam { body } = &mut node {
+    // *body = Box::new(Node::Var(Var{lam: Box::new(Node::Null)}));
+    *body = Box::new(Node::Var(Var{lam: Box::new(node)}));
+
+
+  }
+
+  println!("{:?}", node);
 }
