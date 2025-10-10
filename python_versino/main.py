@@ -115,8 +115,9 @@ class Null(Node):
   pass
 
 class Lam(Node):
-  def __init__(self, body:Node):
+  def __init__(self, body:Node, var:None):
     self.body = body
+    self.var = var
     parse_lam(self, body, 0)
 
 class Var(Node):
@@ -188,3 +189,12 @@ def format_term(term:Node, ctx: dict[Lam, int])->str:
 #%%
 
 
+def reduce(term:Node):
+  match term:
+    case Lam():
+      reduce(term.body)
+    case App():
+      if term.func == 
+
+
+#%%
