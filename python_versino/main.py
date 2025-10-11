@@ -60,8 +60,8 @@ def parse_lam(lam:Node, current:Node, depth:int)->Node:
       if (lam.targetb):
         var = Node(NodeType.var)
         a,b = dup(var)
-        copy_node(a, lam.targetb)
-        copy_node(b, current)
+        copy(a, lam.targetb)
+        copy(b, current)
         lam.targetb = var
         var.target = lam
       else:
@@ -150,7 +150,7 @@ lam(app(x(0), x(0))).target.target.target.nodeType
 #%%
 
 
-def copy_node(src:Node, dst:Node = None)->Node:
+def copy(src:Node, dst:Node = None)->Node:
   if dst is None: dst = Node(None)
   dst.nodeType = src.nodeType
   dst.target = src.target
@@ -165,47 +165,31 @@ def _lam(term:Node):
 
 def reduce(term:Node):
   other = term.target
-  match term.nodeType:
-    case NodeType.app:
-      func = term.target
-      match func.nodeType:
-        case NodeType.lam:
-          arg = term.targetb
-          ret = func.target
-          if func: copy_node(arg, func)
-          copy_node(ret, term)
+  match (term.nodeType, other.nodeType):
+    case (NodeType.app, NodeType.lam):
+      arg = term.targetb
+      copy(other.target, term)
+      copy(arg, other)
+    case (NodeType.app, NodeType.sup):
+      dups = dup(term.targetb, other.label)
+      copy(sup(app(other.target, dups[0]), app(other.targetb, dups[1]), other.label), term)
+    case (NodeType.dup | NodeType.dup2, on):
+      da, db = term, term.targetb if term.nodeType == NodeType.dup else (term.targetb, term)
+      match on:
         case NodeType.sup:
-          d = dup()
-    case NodeType.dup | NodeType.dup2:
-      d1,d2 = (term, term.targetb) if term.nodeType == NodeType.dup else (term.targetb, term)
-      match d1.target.nodeType:
-        case NodeType.sup:
-          if other.label == d2.label:
-            copy_node(other.target, d1)
-            copy_node(other.targetb, d2)
+          if other.label == da.label:
+            copy(other.target, da)
+            copy(other.targetb, db)
           else:
-            da = dup(other.target, d1.label)
-            db = dup(other.targetb, d1.label)
-            copy_node(sup(da[0], db[0], other.label), d1)
-            copy_node(sup(da[1], db[1], other.label), d2)
+            dup1 = dup(other.target, da.label)
+            dup2 = dup(other.targetb, da.label)
+            copy(sup(dup1[0], dup2[0], other.label), da)
+            copy(sup(dup1[1], dup2[1], other.label), db)
         case NodeType.lam:
-          bods = dup(other.target)
-          l1 = _lam(bods[0])
-          l2 = _lam(bods[1])
-          copy_node(sup(l1, l2, d1.label), other)
+          bods = dup(other.target, term.label)
+          copy(sup(copy(_lam(bods[0]), da), copy(_lam(bods[1]), db), term.label), other)
         case NodeType.prim:
-          copy_node(copy_node(d1.target), d2)
-          copy_node(d1.target, d1)
-    case NodeType.lam:
-      reduce(term.target)
-    case NodeType.sup:
-      reduce(term.target)
-      reduce(term.targetb)
-    
-
-
-
-
+          copy(copy(other, da), db)
 
 def l0(): return lam(lam(x(0)))
 def l1(): return lam(lam(x(1)))
