@@ -158,9 +158,14 @@ def copy_node(src:Node, dst:Node = None)->Node:
   if src.targetb: dst.targetb = src.targetb
   return dst
 
+def _lam(term:Node):
+  lam = Node(NodeType.lam)
+  lam.target = term
+  return lam
+
 def reduce(term:Node):
+  other = term.target
   match term.nodeType:
-    case NodeType.lam: reduce(term.target)
     case NodeType.app:
       func = term.target
       match func.nodeType:
@@ -169,24 +174,34 @@ def reduce(term:Node):
           ret = func.target
           if func: copy_node(arg, func)
           copy_node(ret, term)
-        case NodeType.dup:
-          raise NotImplementedError("dup not implemented")
+        case NodeType.sup:
+          d = dup()
     case NodeType.dup | NodeType.dup2:
       d1,d2 = (term, term.targetb) if term.nodeType == NodeType.dup else (term.targetb, term)
       match d1.target.nodeType:
         case NodeType.sup:
-          s = d1.target
-          if s.label == d2.label:
-            copy_node(s.target, d1)
-            copy_node(s.targetb, d2)
+          if other.label == d2.label:
+            copy_node(other.target, d1)
+            copy_node(other.targetb, d2)
           else:
-            da = dup(s.target, d1.label)
-            db = dup(s.targetb, d1.label)
-            copy_node(sup(da[0], db[0], s.label), d1)
-            copy_node(sup(da[1], db[1], s.label), d2)
+            da = dup(other.target, d1.label)
+            db = dup(other.targetb, d1.label)
+            copy_node(sup(da[0], db[0], other.label), d1)
+            copy_node(sup(da[1], db[1], other.label), d2)
+        case NodeType.lam:
+          bods = dup(other.target)
+          l1 = _lam(bods[0])
+          l2 = _lam(bods[1])
+          copy_node(sup(l1, l2, d1.label), other)
         case NodeType.prim:
           copy_node(copy_node(d1.target), d2)
           copy_node(d1.target, d1)
+    case NodeType.lam:
+      reduce(term.target)
+    case NodeType.sup:
+      reduce(term.target)
+      reduce(term.targetb)
+    
 
 
 
