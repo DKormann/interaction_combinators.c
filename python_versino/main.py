@@ -26,56 +26,31 @@ class NodeType(Enum):
   root = auto()
   prim = auto()
 
+  intermediate_var = auto()
+
   lam = auto()
   app = auto()
   dup = auto()
   dup2 = auto()
   sup = auto()
 
-  intermediate_var = auto()
-  def __str__(self)->str:
-    return self.name
-  def __repr__(self)->str:
-    return self.name
+  def __str__(self)->str: return self.name
+  def __repr__(self)->str: return self.name
 
 class Node:
   def __init__(self, nodeType: NodeType):
     self.nodeType = nodeType
-    self.target : Node | None = None
-    self.label : int | None = None
-    self.targetb : Node | None = None
+    self.target = None
+    self.targetb = None
+    self.label = None
   def __str__(self)->str: return format_term(self, {})
   def __repr__(self)->str: return format_term(self, {})
 
-def parse_lam(lam:Node, current:Node, depth:int)->Node:
-  match current.nodeType:
-    case NodeType.lam:
-      parse_lam(lam, current.target, depth + 1)
-    case NodeType.intermediate_var if current.label == depth:
-      if (lam.targetb):
-        var = Node(NodeType.var)
-        a,b = dup(var)
-        copy(a, lam.targetb)
-        copy(b, current)
-        lam.targetb = var
-        var.target = lam
-      else:
-        lam.targetb = current
-        current.nodeType = NodeType.var
-        current.target = lam
-    case NodeType.app:
-      parse_lam(lam, current.target, depth)
-      parse_lam(lam, current.targetb, depth)
-    case NodeType.dup | NodeType.dup2:
-      parse_lam(lam, current.target, depth)
-      parse_lam(lam, current.targetb, depth)
-    case NodeType.sup:
-      parse_lam(lam, current.target, depth)
-      parse_lam(lam, current.targetb, depth)
 
 def lam(body:Node) -> Node:
   res = Node(NodeType.lam)
   res.target = body
+  res.label = 0
   parse_lam(res, body, 0)
   return res
 
@@ -95,14 +70,20 @@ def app(func:Node, arg:Node) -> Node:
   res.targetb = arg
   return res
 
-def sup(a:Node, b:Node, label:int = 0)->Node:
+ilab = 70
+
+def sup(a:Node, b:Node, label:int = None)->Node:
+  global ilab
+  if label is None: label = (ilab := ilab + 1)
   res = Node(NodeType.sup)
   res.target = a
   res.targetb = b
   res.label = label
   return res
 
-def dup(target:Node, label:int = 0)->tuple[Node, Node]:
+def dup(target:Node, label:int = None)->tuple[Node, Node]:
+  global ilab
+  if label is None: label = (ilab := ilab + 1)
   d = Node(NodeType.dup)
   d2 = Node(NodeType.dup2)
   d.target = d2.target = target
@@ -115,18 +96,37 @@ def dup(target:Node, label:int = 0)->tuple[Node, Node]:
 def null():
   return Node(NodeType.null)
 
-def format_term(term:Node, ctx: dict[Node, int])->str:
 
+def parse_lam(lam:Node, current:Node, depth:int)->Node:
+  match current.nodeType:
+    case NodeType.lam:
+      parse_lam(lam, current.target, depth + 1)
+    case NodeType.intermediate_var if current.label == depth:
+      if (lam.targetb):
+        raise NotImplemented()
+        # prev_var = lam.targetb
+        # lam.targetb = copy(prev_var)
+        # a,b = dup(lam.targetb)
+        # copy(a, prev_var)
+        # copy(b,current)
+      else:
+        return lam
+        
+    case NodeType.dup | NodeType.dup2 | NodeType.app | NodeType.sup:
+      parse_lam(lam, current.target, current, depth)
+      parse_lam(lam, current.targetb, current, depth)
+
+def format_term(term:Node, ctx: dict[Node, int])->str:
+  ctx[None] = "_"
   match term.nodeType:
     case NodeType.lam:
-      if not term in ctx: ctx[term] = len(ctx)
-      return f"λ{chr(ctx[term] + 97)}.{format_term(term.target, ctx)}"
+      if term.targetb: ctx[term.targetb] = chr(len(ctx) + 96)
+      return f"λ{ctx[term.targetb]}.{format_term(term.target, ctx)}"
     case NodeType.app:
       return f"({format_term(term.target, ctx)} {format_term(term.targetb, ctx)})"
     case NodeType.var:
-      if term.target.nodeType == NodeType.lam:
-        return f"{chr(ctx[term.target] + 97)}"
-      return format_term(term.target, ctx)
+      if term not in ctx: ctx[term] = chr(len(ctx) + 96)
+      return ctx[term]
     case NodeType.dup | NodeType.dup2:
       return f"&{term.label}.{format_term(term.target, ctx)}"
     case NodeType.sup:
@@ -136,20 +136,24 @@ def format_term(term:Node, ctx: dict[Node, int])->str:
   return str(term.nodeType)
 
 
+t = lam(lam(app(x(1), x(1))))
+t
+
 #%%
 
 
 def copy(src:Node, dst:Node = None)->Node:
   if dst is None: dst = Node(None)
   dst.nodeType = src.nodeType
-  dst.target = src.target
-  if src.label: dst.label = src.label
+  if src.target: dst.target = src.target
+  if src.label is not None: dst.label = src.label
   if src.targetb: dst.targetb = src.targetb
   return dst
 
 def _lam(term:Node):
   lam = Node(NodeType.lam)
   lam.target = term
+  lam.targetb = Node(NodeType.var)
   return lam
 
 def reduce(term:Node):
@@ -161,7 +165,7 @@ def reduce(term:Node):
     case (NodeType.app, NodeType.lam):
       arg = term.targetb
       copy(other.target, term)
-      copy(arg, other)
+      copy(arg, other.targetb)
       reduce(term)
     case (NodeType.app, NodeType.sup):
       dups = dup(term.targetb, other.label)
@@ -190,20 +194,36 @@ def reduce(term:Node):
     case (NodeType.sup, on):
       reduce(term.targetb)
 
-# def l0(): return lam(lam(x(0)))
-# def l1(): return lam(lam(x(1)))
 
-# a0 = app(l1(), null())
-# print(a0)
-# reduce(a0)
-# a0
+t = app(lam(x(0)), null())
 
-a,b = dup(sup(null(), null()))
+print(t)
+
+reduce(t)
+
+print(t)
+
+#%%
+
+
+
+
+def l0(): return lam(lam(x(0)))
+def l1(): return lam(lam(x(1)))
+
+a0 = app(l1(), null())
+print(a0)
+reduce(a0)
+a0
+
+#%%
+
+a,b = dup(sup(null(), null(),0), 0)
 print(a)
 reduce(a)
 print(a)
 
-a,b = dup(sup(null(), num(1), 1))
+a,b = dup(sup(null(), num(1), 0), 1)
 print(a)
 reduce(a)
 print(a)
