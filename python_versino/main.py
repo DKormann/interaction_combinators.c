@@ -1,4 +1,3 @@
-
 #%%
 
 from code import interact
@@ -45,11 +44,7 @@ class Node:
     self.target : Node | None = None
     self.label : int | None = None
     self.targetb : Node | None = None
-  def __str__(self)->str:
-    # if self.nodeType in [NodeType.lam, NodeType.app, NodeType.dup, NodeType.sup]:
-    #   return format_term(self, {})
-    # return str(self.nodeType)
-    return format_term(self, {})
+  def __str__(self)->str: return format_term(self, {})
   def __repr__(self)->str: return format_term(self, {})
 
 def parse_lam(lam:Node, current:Node, depth:int)->Node:
@@ -141,12 +136,6 @@ def format_term(term:Node, ctx: dict[Node, int])->str:
   return str(term.nodeType)
 
 
-x1,x2 = dup(null())
-sup(lam(x(0)), x1)
-
-#%%
-
-lam(app(x(0), x(0))).target.target.target.nodeType
 #%%
 
 
@@ -164,15 +153,21 @@ def _lam(term:Node):
   return lam
 
 def reduce(term:Node):
+  if term is None: return
   other = term.target
+  if other is None: return
+  reduce(other)
   match (term.nodeType, other.nodeType):
     case (NodeType.app, NodeType.lam):
       arg = term.targetb
       copy(other.target, term)
       copy(arg, other)
+      reduce(term)
     case (NodeType.app, NodeType.sup):
       dups = dup(term.targetb, other.label)
-      copy(sup(app(other.target, dups[0]), app(other.targetb, dups[1]), other.label), term)
+      sp = sup(app(other.target, dups[0]), app(other.targetb, dups[1]), other.label)
+      copy(sp, term)
+      reduce(term)
     case (NodeType.dup | NodeType.dup2, on):
       da, db = term, term.targetb if term.nodeType == NodeType.dup else (term.targetb, term)
       match on:
@@ -180,25 +175,29 @@ def reduce(term:Node):
           if other.label == da.label:
             copy(other.target, da)
             copy(other.targetb, db)
+            reduce(term)
           else:
             dup1 = dup(other.target, da.label)
             dup2 = dup(other.targetb, da.label)
             copy(sup(dup1[0], dup2[0], other.label), da)
             copy(sup(dup1[1], dup2[1], other.label), db)
+            reduce(term)
         case NodeType.lam:
           bods = dup(other.target, term.label)
           copy(sup(copy(_lam(bods[0]), da), copy(_lam(bods[1]), db), term.label), other)
-        case NodeType.prim:
+        case NodeType.prim | NodeType.null:
           copy(copy(other, da), db)
+    case (NodeType.sup, on):
+      reduce(term.targetb)
 
-def l0(): return lam(lam(x(0)))
-def l1(): return lam(lam(x(1)))
+# def l0(): return lam(lam(x(0)))
+# def l1(): return lam(lam(x(1)))
 
-a0 = app(l1(), null())
-print(a0)
-reduce(a0)
-a0
-#%%
+# a0 = app(l1(), null())
+# print(a0)
+# reduce(a0)
+# a0
+
 a,b = dup(sup(null(), null()))
 print(a)
 reduce(a)
