@@ -7,19 +7,7 @@ from tarfile import tar_filter
 from threading import currentThread
 
 
-
-class PortType(Enum):
-  main = 0
-  aux1 = 1
-  aux2 = 2
-  def __str__(self) -> str:
-    return f"{self.name}"
-
-MAIN = PortType.main
-AUX1 = PortType.aux1
-AUX2 = PortType.aux2
-
-class NodeType(Enum):
+class Tag(Enum):
   era = auto()
   null = auto()
   var = auto()
@@ -38,36 +26,36 @@ class NodeType(Enum):
   def __repr__(self)->str: return self.name
 
 class Node:
-  def __init__(self, nodeType: NodeType):
-    self.nodeType = nodeType
-    self.target = None
-    self.targetb = None
+  def __init__(self, tag: Tag):
+    self.tag = tag
+    self.s0 = None
+    self.s1 = None
     self.label = None
   def __str__(self)->str: return format_term(self, {})
   def __repr__(self)->str: return format_term(self, {})
 
 
 def lam(body:Node) -> Node:
-  res = Node(NodeType.lam)
-  res.target = body
+  res = Node(Tag.lam)
+  res.s0 = body
   res.label = 0
   parse_lam(res, body, 0)
   return res
 
 def x(var:int) -> Node:
-  res = Node(NodeType.intermediate_var)
+  res = Node(Tag.intermediate_var)
   res.label = var
   return res
 
 def num(n:int) -> Node:
-  res = Node(NodeType.prim)
+  res = Node(Tag.prim)
   res.label = n
   return res
 
 def app(func:Node, arg:Node) -> Node:
-  res = Node(NodeType.app)
-  res.target = func
-  res.targetb = arg
+  res = Node(Tag.app)
+  res.s0 = func
+  res.s1 = arg
   return res
 
 ilab = 70
@@ -75,65 +63,65 @@ ilab = 70
 def sup(a:Node, b:Node, label:int = None)->Node:
   global ilab
   if label is None: label = (ilab := ilab + 1)
-  res = Node(NodeType.sup)
-  res.target = a
-  res.targetb = b
+  res = Node(Tag.sup)
+  res.s0 = a
+  res.s1 = b
   res.label = label
   return res
 
-def dup(target:Node, label:int = None)->tuple[Node, Node]:
+def dup(s0:Node, label:int = None)->tuple[Node, Node]:
   global ilab
   if label is None: label = (ilab := ilab + 1)
-  d = Node(NodeType.dup)
-  d2 = Node(NodeType.dup2)
-  d.target = d2.target = target
-  d.targetb = d2
-  d2.targetb = d
+  d = Node(Tag.dup)
+  d2 = Node(Tag.dup2)
+  d.s0 = d2.s0 = s0
+  d.s1 = d2
+  d2.s1 = d
   d.label = label
   d2.label = label
   return d, d2
 
 def null():
-  return Node(NodeType.null)
+  return Node(Tag.null)
 
 
 def parse_lam(lam:Node, current:Node, depth:int)->Node:
-  match current.nodeType:
-    case NodeType.lam:
-      parse_lam(lam, current.target, depth + 1)
-    case NodeType.intermediate_var if current.label == depth:
-      if (lam.targetb):
+  match current.tag:
+    case Tag.lam:
+      parse_lam(lam, current.s0, depth + 1)
+    case Tag.intermediate_var if current.label == depth:
+      if (lam.s1):
         raise NotImplemented()
-        # prev_var = lam.targetb
-        # lam.targetb = copy(prev_var)
-        # a,b = dup(lam.targetb)
+        # prev_var = lam.s1
+        # lam.s1 = copy(prev_var)
+        # a,b = dup(lam.s1)
         # copy(a, prev_var)
         # copy(b,current)
       else:
         return lam
         
-    case NodeType.dup | NodeType.dup2 | NodeType.app | NodeType.sup:
-      parse_lam(lam, current.target, current, depth)
-      parse_lam(lam, current.targetb, current, depth)
+    case Tag.dup | Tag.dup2 | Tag.app | Tag.sup:
+      parse_lam(lam, current.s0, current, depth)
+      parse_lam(lam, current.s1, current, depth)
 
 def format_term(term:Node, ctx: dict[Node, int])->str:
   ctx[None] = "_"
-  match term.nodeType:
-    case NodeType.lam:
-      if term.targetb: ctx[term.targetb] = chr(len(ctx) + 96)
-      return f"λ{ctx[term.targetb]}.{format_term(term.target, ctx)}"
-    case NodeType.app:
-      return f"({format_term(term.target, ctx)} {format_term(term.targetb, ctx)})"
-    case NodeType.var:
+  match term.tag:
+    case Tag.lam:
+      if term.s1: ctx[term.s1] = chr(len(ctx) + 96)
+      return f"λ{ctx[term.s1]}.{format_term(term.s0, ctx)}"
+    case Tag.app:
+      return f"({format_term(term.s0, ctx)} {format_term(term.s1, ctx)})"
+    case Tag.var:
       if term not in ctx: ctx[term] = chr(len(ctx) + 96)
       return ctx[term]
-    case NodeType.dup | NodeType.dup2:
-      return f"&{term.label}.{format_term(term.target, ctx)}"
-    case NodeType.sup:
-      return f"&{term.label}{{{format_term(term.target, ctx)}, {format_term(term.targetb, ctx)}}}"
-    case NodeType.null:
+    case Tag.dup | Tag.dup2:
+      return f"&{term.label}.{format_term(term.s0, ctx)}"
+    case Tag.sup:
+      return f"&{term.label}{{{format_term(term.s0, ctx)}, {format_term(term.s1, ctx)}}}"
+    case Tag.null:
       return "Nul"
-  return str(term.nodeType)
+  return str(term.tag)
 
 
 t = lam(lam(app(x(1), x(1))))
@@ -144,55 +132,55 @@ t
 
 def copy(src:Node, dst:Node = None)->Node:
   if dst is None: dst = Node(None)
-  dst.nodeType = src.nodeType
-  if src.target: dst.target = src.target
+  dst.tag = src.tag
+  if src.s0: dst.s0 = src.s0
   if src.label is not None: dst.label = src.label
-  if src.targetb: dst.targetb = src.targetb
+  if src.s1: dst.s1 = src.s1
   return dst
 
 def _lam(term:Node):
-  lam = Node(NodeType.lam)
-  lam.target = term
-  lam.targetb = Node(NodeType.var)
+  lam = Node(Tag.lam)
+  lam.s0 = term
+  lam.s1 = Node(Tag.var)
   return lam
 
 def reduce(term:Node):
   if term is None: return
-  other = term.target
+  other = term.s0
   if other is None: return
   reduce(other)
-  match (term.nodeType, other.nodeType):
-    case (NodeType.app, NodeType.lam):
-      arg = term.targetb
-      copy(other.target, term)
-      copy(arg, other.targetb)
+  match (term.tag, other.tag):
+    case (Tag.app, Tag.lam):
+      arg = term.s1
+      copy(other.s0, term)
+      copy(arg, other.s1)
       reduce(term)
-    case (NodeType.app, NodeType.sup):
-      dups = dup(term.targetb, other.label)
-      sp = sup(app(other.target, dups[0]), app(other.targetb, dups[1]), other.label)
+    case (Tag.app, Tag.sup):
+      dups = dup(term.s1, other.label)
+      sp = sup(app(other.s0, dups[0]), app(other.s1, dups[1]), other.label)
       copy(sp, term)
       reduce(term)
-    case (NodeType.dup | NodeType.dup2, on):
-      da, db = term, term.targetb if term.nodeType == NodeType.dup else (term.targetb, term)
+    case (Tag.dup | Tag.dup2, on):
+      da, db = term, term.s1 if term.tag == Tag.dup else (term.s1, term)
       match on:
-        case NodeType.sup:
+        case Tag.sup:
           if other.label == da.label:
-            copy(other.target, da)
-            copy(other.targetb, db)
+            copy(other.s0, da)
+            copy(other.s1, db)
             reduce(term)
           else:
-            dup1 = dup(other.target, da.label)
-            dup2 = dup(other.targetb, da.label)
+            dup1 = dup(other.s0, da.label)
+            dup2 = dup(other.s1, da.label)
             copy(sup(dup1[0], dup2[0], other.label), da)
             copy(sup(dup1[1], dup2[1], other.label), db)
             reduce(term)
-        case NodeType.lam:
-          bods = dup(other.target, term.label)
+        case Tag.lam:
+          bods = dup(other.s0, term.label)
           copy(sup(copy(_lam(bods[0]), da), copy(_lam(bods[1]), db), term.label), other)
-        case NodeType.prim | NodeType.null:
+        case Tag.prim | Tag.null:
           copy(copy(other, da), db)
-    case (NodeType.sup, on):
-      reduce(term.targetb)
+    case (Tag.sup, on):
+      reduce(term.s1)
 
 
 t = app(lam(x(0)), null())
