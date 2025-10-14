@@ -121,34 +121,42 @@ def format_term(term:Node, ctx: dict[Node, int])->str:
   return str(term.tag)
 
 def tree(term:Node, ctx:dict[Node, int])->str:
-  def varname(node:Node): return ctx.setdefault(node, chr(len(ctx) + 97))
+  def varname(node:Node | None):
+    if node is None: return ""
+    return ctx.setdefault(node, chr(len(ctx) + 97))
   def idn(lns:list[str])->list[str]:
     if sum(len(ln) for ln in lns) <= 20: return ["  " + " ".join(map(str.strip, lns))]
     return ["  " + ln for ln in lns]
-  # def prep(head:str, lns:list[str])->list[str]: return [head + " " + lns[0].strip()] + lns[1:]
+  def prep(head:str, lns:list[str])->list[str]: return [head + " " + lns[0].strip()] + lns[1:]
   def _tree(term:Node)->list[str]:
     match term.tag:
-      case Tag.lam: return [f"λ{varname(term.s1)}"] + _tree(term.s0)
-      case Tag.app | Tag.sup: return [term.tag.name] + idn(_tree(term.s0)) + idn(_tree(term.s1))
+      case Tag.lam: return prep(f"λ{varname(term.s1)}", _tree(term.s0))
+      case Tag.app | Tag.sup: return [term.tag.name + (f"{term.label}" if term.label else "")] + idn(_tree(term.s0)) + idn(_tree(term.s1))
       case Tag.dup | Tag.dup2:
         if hide_dups: return _tree(term.s0)
         d1 = term if (term.tag == Tag.dup) else term.s1
         if d1 in ctx: return [varname(term)]
-        return [f"{{{varname(d1)}, {varname(d1.s1)}}} ="] + idn(_tree(term.s0) + [f"in {varname(term)}"])
-    return [format_term(term, ctx)]
+        return [f"{term.label}{{{varname(d1)}, {varname(d1.s1)}}} ="] + idn(_tree(term.s0) + [f"in {varname(term)}"])
+    return [varname(term)]
   return "\n".join(_tree(term))
+
+
+# %%
 
 #%%
 
+
+DEBUG = False
+
 def expect_output(term:Node, output:str):
-  global hide_dups, print_tree
-  prev_hide_dups, prev_print_tree = hide_dups, print_tree
-  hide_dups, print_tree = False, False
+  global hide_dups, print_tree, DEBUG
+  prev_hide_dups, prev_print_tree, prev_DEBUG = hide_dups, print_tree, DEBUG
+  hide_dups, print_tree, DEBUG= False, False, False
   init = format_term(term, {})
   reduce(term)
   res = format_term(term, {})
   assert res == output, f"reduced: {init} -> {res} != {output}"
-  hide_dups, print_tree = prev_hide_dups, prev_print_tree
+  hide_dups, print_tree, DEBUG = prev_hide_dups, prev_print_tree, prev_DEBUG
 
 def church_true(): return lam(lam(x(1)))
 def church_false(): return lam(lam(x(0)))
@@ -180,11 +188,17 @@ def fun(bod:Node)->Node:
 
 
 
+def debug(*args):
+  global DEBUG
+  if DEBUG: print(*args)
+
 
 def reduce(term:Node):
+
   if term.tag in [Tag.var, Tag.prim, Tag.null]: return
   other = term.s0
   if other is None: return
+
   
   reduce(other)
 
@@ -193,9 +207,13 @@ def reduce(term:Node):
       if other.s1: move(term.s1, other.s1)
       move(other.s0, term)
       reduce(term)
-    case (Tag.app, Tag.sup): 
+    case (Tag.app, Tag.sup):
+      debug("REDUCE: app -> sup")
+      debug(term)
+      debug(other)
       da, db = dup(term.s1, other.label)
       move(sup(app(other.s0, da), app(other.s1, db), other.label), term)
+      debug("DONE:",term)
       reduce(term)
     case (Tag.app, Tag.dup | Tag.dup2): reduce(other)
     case (Tag.dup | Tag.dup2, ot):
@@ -227,13 +245,84 @@ def reduce(term:Node):
   return term
 
 
+
 #%%
 
+
+def step(term:Node)->bool:
+  if term.tag in [Tag.var, Tag.prim, Tag.null]: return
+  other = term.s0
+  if other is None: return
+
+  match (term.tag, other.tag):
+    case (Tag.app, Tag.lam):
+      debug("STEP: app -> lam")
+      if other.s1: move(term.s1, other.s1)
+      move(other.s0, term)
+      return True
+    case (Tag.app, Tag.sup):
+      debug("STEP: app -> sup")
+      da, db = dup(term.s1, other.label)
+      move(sup(app(other.s0, da), app(other.s1, db), other.label), term)
+      return True
+    case (Tag.app, Tag.dup | Tag.dup2):
+      return step(other)
+    case (Tag.dup | Tag.dup2, ot):
+      da, db = (term, term.s1) if term.tag == Tag.dup else (term.s1, term)
+      match ot:
+        case Tag.sup:
+          debug("STEP: dup | dup2 -> sup")
+          if other.label == da.label:
+            move(other.s0, da)
+            move(other.s1, db)
+          else:
+            dup1 = dup(other.s0, da.label)
+            dup2 = dup(other.s1, da.label)
+            move(sup(dup1[0], dup2[0], other.label), da)
+            move(sup(dup1[1], dup2[1], other.label), db)
+          return True
+        case Tag.lam:
+          debug("STEP: dup | dup2 -> lam")
+          ba, bb = dup(other.s0, term.label)
+          funa, funb = fun(ba), fun(bb)
+          move(sup(funa.s1, funb.s1, term.label), other.s1)
+          move(funa, da)
+          move(funb, db)
+          return True
+        case Tag.app:
+          return step(term.s0)
+        case Tag.prim | Tag.null:
+          move(move(other, da), db)
+          return True
+        case Tag.var: return False
+    case (Tag.sup, on):
+      return step(term.s0) or step(term.s1)
+    case (Tag.lam, on):
+      return step(term.s0)
+  
+  debug("NO interaction: ", term.tag, other.tag)
+  return False
+
+
+
+
+DEBUG = True
+hide_dups = False
 test_reduce()
+
 
 a = app(church_nat(2), church_nat(2))
 print(a)
 
-reduce(a)
+while step(a):
+  print(a)
+#%%
 
+DEBUG = 1
+
+d = dup(lam(x(0)))
+a = app(d[0], d[1])
 print(a)
+while step(a):
+  print(a)
+
