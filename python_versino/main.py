@@ -20,14 +20,17 @@ class Tag(Enum):
   def __str__(self)->str: return self.name
   def __repr__(self)->str: return self.name
 
+hide_dups = False
+print_tree = True
+
 class Node:
   def __init__(self, tag: Tag, s0:"Node" = None, s1:"Node" = None, label:int = None):
     self.tag = tag
     self.s0 = s0
     self.s1 = s1
     self.label = label
-  def __str__(self)->str: return format_term(self, {})
-  def __repr__(self)->str: return format_term(self, {})
+  def __repr__(self)->str: str(self)
+  def __str__(self)->str: return (tree if print_tree else format_term)(self, {})
 
 def x(var:int) -> Node: return Node(Tag.intermediate_var, label = var)
 
@@ -98,12 +101,10 @@ def parse_lam(lam:Node, current:Node, depth:int)->Node:
 
 
 
-hide_dups = True
 def format_term(term:Node, ctx: dict[Node, int])->str:
   def varname(node:Node):
     if node not in ctx: ctx[node] = chr(len(ctx) + 96)
     return ctx[node]
-    
   ctx[None] = ""
   match term.tag:
     case Tag.lam: return f"λ{varname(term.s1)}.{format_term(term.s0, ctx)}"
@@ -112,10 +113,7 @@ def format_term(term:Node, ctx: dict[Node, int])->str:
     case Tag.dup | Tag.dup2:
       if hide_dups: return format_term(term.s0, ctx)
       d1 = term if (term.tag == Tag.dup) else term.s1
-      if d1 in ctx:
-        a = varname(d1)
-        b = varname(d1.s1)
-        return a if term == d1 else b
+      if d1 in ctx: return varname(d1 if term == d1 else d1.s1)
       a = varname(d1)
       b = varname(d1.s1)
       return f"&{{{a},{b}}} = {format_term(term.s0,ctx)}; {a if term==d1 else b}"
@@ -125,29 +123,29 @@ def format_term(term:Node, ctx: dict[Node, int])->str:
   return str(term.tag)
 
 
-def tree(term:Node)->str:
-  ctx = {}
+def tree(term:Node, ctx:dict[Node, int])->str:
   def varname(node:Node): return ctx.setdefault(node, chr(len(ctx) + 97))
-  def idn(lns:list[str])->list[str]: return ["  " + ln for ln in lns]
+  def idn(lns:list[str])->list[str]:
+    if sum(len(ln) for ln in lns) <= 20: return ["  " + " ".join(map(str.strip, lns))]
+    return ["  " + ln for ln in lns]
+  def prep(head:str, lns:list[str])->list[str]: return [head + " " + lns[0].strip()] + lns[1:]
   def _tree(term:Node)->list[str]:
     match term.tag:
-      case Tag.lam: return [f"λ{varname(term.s1)}"] + idn(_tree(term.s0))
+      case Tag.lam: return prep(f"λ{varname(term.s1)}", _tree(term.s0))
       case Tag.app | Tag.sup: return [term.tag.name] + idn(_tree(term.s0)) + idn(_tree(term.s1))
       case Tag.dup | Tag.dup2:
         if hide_dups: return _tree(term.s0)
         d1 = term if (term.tag == Tag.dup) else term.s1
         if d1 in ctx: return varname(term)
-        return [f"{{{varname(d1)}, {varname(d1.s1)}}}="] + idn(_tree(term.s0)) + [f"  in {varname(term)}"]
+        return prep(f"{{{varname(d1)}, {varname(d1.s1)}}} =", idn(_tree(term.s0)) + [f"  in {varname(term)}"])
     return [format_term(term, ctx)]
   return "\n".join(_tree(term))
 
 
-t = lam(lam(app(x(1), x(1))))
 
-hide_dups = False
 
-print(tree(t))
-print(tree(dup(sup(null(), num(1), 0), 0)[0]))
+print(lam(lam(app(x(1), x(1)))))
+print(dup(sup(null(), num(1), 0), 0)[0])
 
 #%%
 
@@ -169,6 +167,9 @@ def church_nat(n:int):
 
 
 def test_reduce():
+  global hide_dups, print_tree
+  hide_dups = False
+  print_tree = False
   expect_output(lam(x(0)), "λa.a")
   expect_output(null(), "Nul")
   expect_output(church_true(), "λa.λ.a")
@@ -187,13 +188,11 @@ test_reduce()
 
 #%%
 
+hide_dups = True
 
 a = app(church_nat(2), church_nat(2))
 
-print(a)
-
-reduce(a)
-
+print_tree = True
 print(a)
 
 #%%
