@@ -1,8 +1,9 @@
 #%%
+
 from enum import Enum, auto
+from string import Formatter
 
 class Tag(Enum):
-  era = auto()
   null = auto()
   var = auto()
   root = auto()
@@ -27,8 +28,6 @@ class Node:
     self.label = label
   def __str__(self)->str: return format_term(self, {})
   def __repr__(self)->str: return format_term(self, {})
-
-
 
 def x(var:int) -> Node: return Node(Tag.intermediate_var, label = var)
 
@@ -97,6 +96,9 @@ def parse_lam(lam:Node, current:Node, depth:int)->Node:
     case Tag.dup | Tag.dup2:
       parse_lam(lam, current.s0, depth)
 
+
+
+hide_dups = True
 def format_term(term:Node, ctx: dict[Node, int])->str:
   def varname(node:Node):
     if node not in ctx: ctx[node] = chr(len(ctx) + 96)
@@ -104,13 +106,11 @@ def format_term(term:Node, ctx: dict[Node, int])->str:
     
   ctx[None] = ""
   match term.tag:
-    case Tag.lam:
-
-      return f"λ{varname(term.s1)}.{format_term(term.s0, ctx)}"
+    case Tag.lam: return f"λ{varname(term.s1)}.{format_term(term.s0, ctx)}"
     case Tag.app: return f"({format_term(term.s0, ctx)} {format_term(term.s1, ctx)})"
     case Tag.var: return varname(term)
     case Tag.dup | Tag.dup2:
-
+      if hide_dups: return format_term(term.s0, ctx)
       d1 = term if (term.tag == Tag.dup) else term.s1
       if d1 in ctx:
         a = varname(d1)
@@ -118,17 +118,109 @@ def format_term(term:Node, ctx: dict[Node, int])->str:
         return a if term == d1 else b
       a = varname(d1)
       b = varname(d1.s1)
-      return f"&{term.label}{{{a},{b}}} = {format_term(term.s0,ctx)}; {a if term==d1 else b}"
-    case Tag.sup: return f"&{term.label}{{{format_term(term.s0, ctx)}, {format_term(term.s1, ctx)}}}"
+      return f"&{{{a},{b}}} = {format_term(term.s0,ctx)}; {a if term==d1 else b}"
+    case Tag.sup: return f"&{{{format_term(term.s0, ctx)}, {format_term(term.s1, ctx)}}}"
     case Tag.null: return "Nul"
     case Tag.prim: return str(term.label)
   return str(term.tag)
 
 
+def tree(term:Node)->str:
+  ctx = {}
+  def varname(node:Node): return ctx.setdefault(node, chr(len(ctx) + 97))
+  def idn(lns:list[str])->list[str]: return ["  " + ln for ln in lns]
+  def _tree(term:Node)->list[str]:
+    match term.tag:
+      case Tag.lam: return [f"λ{varname(term.s1)}"] + idn(_tree(term.s0))
+      case Tag.app | Tag.sup: return [term.tag.name] + idn(_tree(term.s0)) + idn(_tree(term.s1))
+      case Tag.dup | Tag.dup2:
+        if hide_dups: return _tree(term.s0)
+        d1 = term if (term.tag == Tag.dup) else term.s1
+        if d1 in ctx: return varname(term)
+        return [f"{{{varname(d1)}, {varname(d1.s1)}}}="] + idn(_tree(term.s0)) + [f"  in {varname(term)}"]
+    return [format_term(term, ctx)]
+  return "\n".join(_tree(term))
+
+
 t = lam(lam(app(x(1), x(1))))
 
-t
+hide_dups = False
 
+print(tree(t))
+print(tree(dup(sup(null(), num(1), 0), 0)[0]))
+
+#%%
+
+def expect_output(term:Node, output:str):
+  init = format_term(term, {})
+  reduce(term)
+  res = format_term(term, {})
+  assert res == output, f"reduced: {init} -> {res} != {output}"
+
+def church_true():
+  return lam(lam(x(1)))
+
+def church_false():
+  return lam(lam(x(0)))
+
+def church_nat(n:int):
+  def go(n:int): return x(0) if n == 0 else app(x(1), go(n-1))
+  return lam(lam(go(n)))
+
+
+def test_reduce():
+  expect_output(lam(x(0)), "λa.a")
+  expect_output(null(), "Nul")
+  expect_output(church_true(), "λa.λ.a")
+  expect_output(church_nat(0), "λ.λa.a")
+  expect_output(church_nat(1), "λa.λb.(a b)")
+  expect_output(church_nat(2), "λa.λb.(&{c,d} = a; c (d b))")
+
+  expect_output(dup(sup(null(), num(1), 0), 0)[0], "Nul")
+  expect_output(dup(sup(null(), num(1), 0), 1)[0], "&{Nul, 1}")
+  expect_output(dup(lam(x(0)))[0], "λa.a")
+  expect_output(app(sup(lam(x(0)), lam(null())), num(2)), "&{2, Nul}")
+
+  
+
+test_reduce()
+
+#%%
+
+
+a = app(church_nat(2), church_nat(2))
+
+print(a)
+
+reduce(a)
+
+print(a)
+
+#%%
+
+
+hide_dups = False
+k = a.s0
+reduce(k)
+a
+
+#%%
+
+
+
+#%%
+
+
+λa.(&{b,c} = λd.λe.(&{f,g} = d; f (g e)); b (c a))
+
+# L
+
+λa.(λb.λc.(b (b c)) (λb.λc.(b (b c)) a))
+
+
+#%%
+
+reduce(app(dup(lam(x(0)))[0], null()))
 
 #%%
 
@@ -140,23 +232,26 @@ def fun(bod:Node)->Node:
   return res
 
 def reduce(term:Node):
-  if term is None: return
-  other = term.s0
+  if term.tag in [Tag.var, Tag.prim, Tag.null]:
+    return
+  
+  other = term.s0 
   if other is None: return
-  print(term, other)
-  # reduce(other)
+  
+  reduce(other)
+
   match (term.tag, other.tag):
     case (Tag.app, Tag.lam):
-      arg = term.s1
-      if other.s1: move(arg, other.s1)
+      if other.s1: move(term.s1, other.s1)
       move(other.s0, term)
       reduce(term)
-
-    case (Tag.app, Tag.sup):
-      dups = dup(term.s1, other.label)
-      sp = sup(app(other.s0, dups[0]), app(other.s1, dups[1]), other.label)
-      move(sp, term)
+    case (Tag.app, Tag.sup): 
+      da, db = dup(term.s1, other.label)
+      move(sup(app(other.s0, da), app(other.s1, db), other.label), term)
       reduce(term)
+    case (Tag.app, Tag.dup | Tag.dup2):
+      reduce(other)      
+
     case (Tag.dup | Tag.dup2, ot):
       da, db = (term, term.s1) if term.tag == Tag.dup else (term.s1, term)
       match ot:
@@ -172,10 +267,9 @@ def reduce(term:Node):
             move(sup(dup1[1], dup2[1], other.label), db)
             reduce(term)
         case Tag.lam:
-          bods = dup(other.s0, term.label)
-          funa, funb = fun(bods[0]), fun(bods[1])
-          oldvar = other.s1
-          move(sup(funa.s1, funb.s1, term.label), oldvar)
+          ba, bb = dup(other.s0, term.label)
+          funa, funb = fun(ba), fun(bb)
+          move(sup(funa.s1, funb.s1, term.label), other.s1)
           move(funa, da)
           move(funb, db)
           reduce(term)
@@ -186,35 +280,14 @@ def reduce(term:Node):
       reduce(term.s1)
     case (Tag.lam, on):
       reduce(term.s0)
-
-
-t = app(lam(x(0)), null())
-
-print(t)
-
-reduce(t)
-
-print(t)
+  return term
 
 
 
-a,b = dup(sup(null(), num(1),0), 0)
-print(a)
-reduce(a)
-print(a)
+# test_reduce()
 
-a,b = dup(sup(null(), num(1),0), 1)
-print(a)
-reduce(a)
-print(a)
+# %%
 
-a,b = dup(lam(x(0)))
+#%%
 
-print(a)
-reduce(a)
-print(a)
-
-a = app(sup(lam(x(0)), lam(null())), num(0))
-print(a)
-reduce(a)
-print(a)
+  
