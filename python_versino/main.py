@@ -137,13 +137,13 @@ def tree(term:Node, ctx:dict[Node, int])->str:
         d1 = term if (term.tag == Tag.dup) else term.s1
         if d1 in ctx: return [varname(term)]
         return [f"{term.label}{{{varname(d1)}, {varname(d1.s1)}}} ="] + idn(_tree(term.s0) + [f"in {varname(term)}"])
+      case Tag.prim: return [str(term.label)]
     return [varname(term)]
   return "\n".join(_tree(term))
 
 
 # %%
 
-#%%
 
 
 DEBUG = False
@@ -215,14 +215,11 @@ def test_reduce():
     "λa.λb.(&{c,d} = a; c (d b))"
   )
 
-
-
   expect_output(
     app(church_nat(2), church_nat(1)),
-    "λa.λb.(&{c,d} = a; c (d b))"
+    "λa.λb.(a &{c,d} = &{b, c}; d)"
   )
-
-
+  
 
 #%%
 def fun(bod:Node)->Node:
@@ -241,6 +238,7 @@ def step(term:Node)->bool:
   if term.tag in [Tag.var, Tag.prim, Tag.null]: return
   other = term.s0
   if other is None: return
+  debug("STEP:", term)
   match (term.tag, other.tag):
     case (Tag.app, Tag.lam):
       if other.s1: move(term.s1, other.s1)
@@ -251,6 +249,18 @@ def step(term:Node)->bool:
       move(sup(app(other.s0, da), app(other.s1, db), other.label), term)
       return True
     case (Tag.app, Tag.dup | Tag.dup2):
+      return step(other)
+    case (Tag.app, Tag.prim):
+      match term.s1.tag:
+        case Tag.prim:
+          res = other.label(term.s1.label)
+          move(num(res), term)
+          return True
+        case Tag.sup:
+          pass
+      return False
+
+    case (Tag.app, _):
       return step(other)
     case (Tag.dup | Tag.dup2, other_tag):
       da, db = (term, term.s1) if term.tag == Tag.dup else (term.s1, term)
@@ -275,11 +285,13 @@ def step(term:Node)->bool:
           move(funb, db)
           return True
         case Tag.app:
-          return step(term.s0)
+          return step(other)
         case Tag.prim | Tag.null:
           move(move(other, da), db)
           return True
         case Tag.var: return False
+        case _:
+          return step(other)
     case (Tag.sup, on):
       return step(term.s0) or step(term.s1)
     case (Tag.lam, on):
@@ -290,16 +302,41 @@ def step(term:Node)->bool:
 
 
 def reduce(term):
-  # while step(term):
-  #   pass
-  for i in range(14):
-    if step(term):
-      pass
-    else:
-      break
-DEBUG = True
-print_tree = True
-a = app(church_nat(2), church_nat(2))
-reduce(a)
-a
+  while step(term):
+    pass
+
+
+
+c4 = app(church_nat(2), church_nat(2))
+
+reduce(c4)
+print(c4)
+
+
+#%%
+
+import sys
+sys.setrecursionlimit(30)
+
+DEBUG = False
+
+suc = num(lambda x: x + 1)
+
+a = app(app(c4, suc), num(1))
+
+# reduce(a)
+
+step(a)
+print(a)
+
+step(a)
+print(a)
+
+
+hide_dups = True
+step(a)
+print(a)
+
+
+
 
