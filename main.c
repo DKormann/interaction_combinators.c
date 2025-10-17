@@ -77,7 +77,7 @@ int enqueue(Queue* queue, Node* node, int * ctr){
 }
 
 
-int* format(Node* node){
+int* serialize(Node* node){
 
   Queue* queue = malloc(sizeof(Queue));
   queue->node = node;
@@ -103,8 +103,6 @@ int* format(Node* node){
 
   while (1){
 
-    // printf("current: %s %d %d %d\n", tag_name(current->node->tag), current->node->label, current->s0, current->s1);
-
     result[ctr] = current->node->tag;
     result[ctr + 1] = current->node->label;
     result[ctr + 2] = current->s0;
@@ -123,7 +121,6 @@ int* format(Node* node){
 
 
 void move(Node* src, Node* dst){
-  // printf("move: %s -> %s\n", tag_name(src->tag), tag_name(dst->tag));
   dst->tag = src->tag;
   dst->s0 = src->s0;
   dst->s1 = src->s1;
@@ -133,11 +130,9 @@ void move(Node* src, Node* dst){
       printf("Error: Invalid tag for lam in move\n");
       exit(1);
     }
-    // printf("moving lam to var\n");
     src->s0->s1 = dst;
   }
   if (src->tag == Tag_Lam){
-    // printf("moving var to lam\n");
     dst->s1->s0 = dst;
   }
   if (src->tag == Tag_Dup || src->tag == Tag_Dup2){
@@ -248,7 +243,6 @@ int step(Node* term){
             return 1;
           }
         }
-        
         default: break;
       }
 
@@ -266,14 +260,40 @@ void run(Node* node, int steps){
   }
 }
 
+Node* deserialize(int* data) {
+  int count = data[0];
+  if (count == 0) return NULL;
+  
+  Node** nodes = malloc(sizeof(Node*) * (count + 1));
+  nodes[0] = NULL;
+  
+  for (int i = 0; i < count; i++) {
+    int idx = i * 4 + 1;
+    Node* node = malloc(sizeof(Node));
+    node->tag = data[idx];
+    node->label = data[idx + 1];
+    node->s0 = NULL;
+    node->s1 = NULL;
+    nodes[i + 1] = node;
+  }
+  
+  for (int i = 0; i < count; i++) {
+    int idx = i * 4 + 1;
+    int s0_idx = data[idx + 2];
+    int s1_idx = data[idx + 3];
+    nodes[i + 1]->s0 = nodes[s0_idx];
+    nodes[i + 1]->s1 = nodes[s1_idx];
+  }
+  
+  Node* root = nodes[1];
+  free(nodes);
+  return root;
+}
 
-int* work(int steps){
-
-  Node* node = setup();
-
+int* work(int* graph_data, int steps){
+  Node* node = deserialize(graph_data);
   run(node, steps);
-
-  int* fmt = format(node);
+  int* fmt = serialize(node);
   return fmt;
 }
 

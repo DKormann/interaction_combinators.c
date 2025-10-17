@@ -4,40 +4,45 @@ from run import step
 from typing import Callable
 
 
-
-def to_c(node:Node)->str:
-
+def to_c_data(node: Node) -> list[int]:
+  """Serialize a Node graph to a flat int array for passing to C"""
   ctx = {}
+  nodes = []
+  
+  def visit(n: Node):
+    if n is None or n in ctx:
+      return
+    ctx[n] = len(nodes) + 1  # 1-indexed, 0 is NULL
+    nodes.append(n)
+    visit(n.s0)
+    visit(n.s1)
+  
+  visit(node)
+  
+  # Tag enum mapping to match C enum order
+  tag_map = {
+    Tag.App: 0,
+    Tag.Lam: 1, 
+    Tag.Sup: 2,
+    Tag.Dup: 3,
+    Tag.Dup2: 4,
+    Tag.Null: 5,
+    Tag.Var: 6,
+  }
+  
+  # Format: [count, tag1, label1, s0_idx1, s1_idx1, tag2, ...]
+  data = [len(nodes)]
+  for n in nodes:
+    tag_int = tag_map.get(n.tag, 0)
+    s0_idx = ctx.get(n.s0, 0)
+    s1_idx = ctx.get(n.s1, 0)
+    data.extend([tag_int, n.label or 0, s0_idx, s1_idx])
+  
+  return data
 
-  def go(node:Node, code:str)->str:
-    if node is None: return code
-    if node in ctx: return code
-
-    myname = f"x{len(ctx)}"
-    ctx[node] = myname
-
-    code += f'Node* {myname} = malloc(sizeof(Node));\n'
-    code = go(node.s0, code)
-    code = go(node.s1, code)
-    label = node.label if node.label is not None else 0
-    code += f'{myname}->tag = Tag_{node.tag};\n'
-    code += f'{myname}->label = {label};\n'
-
-    if node.s0 is not None: code += f'{myname}->s0 = {ctx[node.s0]};\n'
-    if node.s1 is not None: code += f'{myname}->s1 = {ctx[node.s1]};\n'
-    return code
-
-  nodes = go(node, "")
-
-  return f'''Node* setup(void){{
-{nodes}
-return {ctx[node]};
-}}
-'''
 
 
-
-def from_c(res:ctypes.POINTER(ctypes.c_int))->Node:
+def from_c_data(res:ctypes.POINTER(ctypes.c_int))->Node:
   l = res[0]
   nodes = [None] + [Node(None) for _ in range(l)]
   for i in range(l):
@@ -52,51 +57,49 @@ def from_c(res:ctypes.POINTER(ctypes.c_int))->Node:
 
 
 
-with open("main.c") as src: code_template = src.read()
-
 os.makedirs("./.tmp", exist_ok=True)
 
 c_path = os.path.join("./.tmp", "main.c")
 so_path = os.path.join("./.tmp", "main.so")
-c_file = open(c_path, "w")
+
+with open("main.c") as src:
+  code_template = src.read()
+
+subprocess.check_call(["clang", "-shared", "-O2", "-fPIC", "main.c", "-o", so_path])
+lib = ctypes.CDLL(so_path)
+lib.work.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
+lib.work.restype = ctypes.POINTER(ctypes.c_int)
+
+def run_term_c(term: Node, steps: int = 100) -> Node:
+  graph_data = to_c_data(term)
+  res = lib.work((ctypes.c_int * len(graph_data))(*graph_data), steps)
+  return from_c_data(res)
 
 
 
-def get_worker(term:Node)->Callable[[int], Node]:
-
-
-  c_file.seek(0)
-  c_file.write(code_template.replace("/*SETUP*/", to_c(term)))
-  c_file.truncate()
-  c_file.flush()
-
-  subprocess.check_call(["clang", "-shared", "-O2", "-fPIC", c_path, "-o", so_path])
-
-  lib = ctypes.CDLL(so_path)
-  lib.work.argtypes = [ctypes.c_int]
-  lib.work.restype = ctypes.POINTER(ctypes.c_int)
-
-  def worker(steps: int)->Node:
-    res = lib.work(steps)
-    return from_c(res)
-
-  return worker
-
-last_worker = None
+# def A(): return app(lam(sup(x(0), app(x(0), null()))), lam(x(0)))
 
 
 
-def A(): return app(lam(sup(x(0), app(x(0), null()))), lam(x(0)))
+node = app(
+  lam(app(x(0), x(0))),
+  lam(lam(null()))
+)
 
-worker = get_worker(A())
+print(node)
+node = run_term_c(node, 0)
 
-for i in range(4):
-  l = A()
-  node = worker(i)
+print(node)
 
+hide_dups.set(True)
+print(node)
 
-  hide_dups.set(False)
-  print(node)
+# last_s = ""
 
-
-c_file.close()
+# for i in range(100):
+#   if last_s == str(node): break
+#   print(f"\n=== Step {i} ===")
+#   last_s = str(node)
+#   node = run_term_c(node, 1)
+#   hide_dups.set(False)
+#   print(node)

@@ -24,57 +24,7 @@ typedef struct Node{
 
 
 
-Node* setup(void){
-Node* x0 = malloc(sizeof(Node));
-Node* x1 = malloc(sizeof(Node));
-Node* x2 = malloc(sizeof(Node));
-Node* x3 = malloc(sizeof(Node));
-Node* x4 = malloc(sizeof(Node));
-x4->tag = Tag_Var;
-x4->label = 0;
-x4->s0 = x1;
-Node* x5 = malloc(sizeof(Node));
-x5->tag = Tag_Dup2;
-x5->label = 72;
-x5->s0 = x4;
-x5->s1 = x3;
-x3->tag = Tag_Dup;
-x3->label = 72;
-x3->s0 = x4;
-x3->s1 = x5;
-Node* x6 = malloc(sizeof(Node));
-Node* x7 = malloc(sizeof(Node));
-x7->tag = Tag_Null;
-x7->label = 0;
-x6->tag = Tag_App;
-x6->label = 0;
-x6->s0 = x5;
-x6->s1 = x7;
-x2->tag = Tag_Sup;
-x2->label = 71;
-x2->s0 = x3;
-x2->s1 = x6;
-x1->tag = Tag_Lam;
-x1->label = 0;
-x1->s0 = x2;
-x1->s1 = x4;
-Node* x8 = malloc(sizeof(Node));
-Node* x9 = malloc(sizeof(Node));
-x9->tag = Tag_Var;
-x9->label = 0;
-x9->s0 = x8;
-x8->tag = Tag_Lam;
-x8->label = 0;
-x8->s0 = x9;
-x8->s1 = x9;
-x0->tag = Tag_App;
-x0->label = 0;
-x0->s0 = x1;
-x0->s1 = x8;
-
-return x0;
-}
-
+/*SETUP*/
 
 
 typedef struct Queue{
@@ -127,7 +77,7 @@ int enqueue(Queue* queue, Node* node, int * ctr){
 }
 
 
-int* format(Node* node){
+int* serialize(Node* node){
 
   Queue* queue = malloc(sizeof(Queue));
   queue->node = node;
@@ -316,14 +266,42 @@ void run(Node* node, int steps){
   }
 }
 
+Node* deserialize(int* data) {
+  int count = data[0];
+  if (count == 0) return NULL;
+  
+  Node** nodes = malloc(sizeof(Node*) * (count + 1));
+  nodes[0] = NULL;  // Index 0 is reserved for NULL
+  
+  // First pass: create all nodes
+  for (int i = 0; i < count; i++) {
+    int idx = i * 4 + 1;
+    Node* node = malloc(sizeof(Node));
+    node->tag = data[idx];
+    node->label = data[idx + 1];
+    node->s0 = NULL;
+    node->s1 = NULL;
+    nodes[i + 1] = node;
+  }
+  
+  // Second pass: link nodes
+  for (int i = 0; i < count; i++) {
+    int idx = i * 4 + 1;
+    int s0_idx = data[idx + 2];
+    int s1_idx = data[idx + 3];
+    nodes[i + 1]->s0 = nodes[s0_idx];
+    nodes[i + 1]->s1 = nodes[s1_idx];
+  }
+  
+  Node* root = nodes[1];
+  free(nodes);
+  return root;
+}
 
-int* work(int steps){
-
-  Node* node = setup();
-
+int* work(int* graph_data, int steps){
+  Node* node = deserialize(graph_data);
   run(node, steps);
-
-  int* fmt = format(node);
+  int* fmt = serialize(node);
   return fmt;
 }
 
