@@ -44,6 +44,11 @@ def to_c_data(node: Node) -> list[int]:
 
 def from_c_data(res:ctypes.POINTER(ctypes.c_int))->Node:
   l = res[0]
+  
+  # Check for error condition (segfault in C code)
+  if l == -1:
+    raise RuntimeError("Segmentation fault occurred in C code")
+  
   nodes = [None] + [Node(None) for _ in range(l)]
   for i in range(l):
 
@@ -71,35 +76,33 @@ lib.work.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
 lib.work.restype = ctypes.POINTER(ctypes.c_int)
 
 def run_term_c(term: Node, steps: int = 100) -> Node:
-  graph_data = to_c_data(term)
-  res = lib.work((ctypes.c_int * len(graph_data))(*graph_data), steps)
-  return from_c_data(res)
+  try:
+    graph_data = to_c_data(term)
+    res = lib.work((ctypes.c_int * len(graph_data))(*graph_data), steps)
+    return from_c_data(res)
+  except RuntimeError as e:
+    print(f"Error: {e}")
+    print("Returning original term")
+    return term
 
 
 
 # def A(): return app(lam(sup(x(0), app(x(0), null()))), lam(x(0)))
 
 
+def c2():
+  return lam(lam(app(x(1), app(x(1), x(0)))))
 
-node = app(
-  lam(app(x(0), x(0))),
-  lam(lam(null()))
-)
+node = app(c2(), c2())
 
-print(node)
-node = run_term_c(node, 0)
 
 print(node)
+while True:
+  prev = str(node)
+  node = run_term_c(node, 1)
+  if prev == str(node): break
+  print(node)
+
 
 hide_dups.set(True)
 print(node)
-
-# last_s = ""
-
-# for i in range(100):
-#   if last_s == str(node): break
-#   print(f"\n=== Step {i} ===")
-#   last_s = str(node)
-#   node = run_term_c(node, 1)
-#   hide_dups.set(False)
-#   print(node)

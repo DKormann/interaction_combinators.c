@@ -2,6 +2,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <signal.h>
+#include <setjmp.h>
 
 
 
@@ -33,6 +35,16 @@ typedef struct Queue{
   int s1;
   struct Queue* next;
 } Queue;
+
+
+// Segfault handler globals
+static jmp_buf segfault_jmp;
+static volatile sig_atomic_t segfault_occurred = 0;
+
+void segfault_handler(int sig) {
+  segfault_occurred = 1;
+  longjmp(segfault_jmp, 1);
+}
 
 
 char* tag_name(int tag){
@@ -120,26 +132,6 @@ int* serialize(Node* node){
 }
 
 
-void move(Node* src, Node* dst){
-  dst->tag = src->tag;
-  dst->s0 = src->s0;
-  dst->s1 = src->s1;
-  dst->label = src->label;
-  if (src->tag == Tag_Var){
-    if (src->s0->tag != Tag_Lam){
-      printf("Error: Invalid tag for lam in move\n");
-      exit(1);
-    }
-    src->s0->s1 = dst;
-  }
-  if (src->tag == Tag_Lam){
-    dst->s1->s0 = dst;
-  }
-  if (src->tag == Tag_Dup || src->tag == Tag_Dup2){
-    dst->s1->s1 = dst;
-  }
-}
-
 
 Node* new_node(Tag tag, int label){
   Node* node = malloc(sizeof(Node));
@@ -179,6 +171,35 @@ Node* sup(Node* a, Node* b, int label){
   return res;
 }
 
+Node* app(Node* f, Node* x){
+  Node* res = new_node(Tag_App, 0);
+  res->s0 = f;
+  res->s1 = x;
+  return res;
+}
+
+
+void move(Node* src, Node* dst){
+
+  dst->tag = src->tag;
+  dst->s0 = src->s0;
+  dst->s1 = src->s1;
+
+  dst->label = src->label;
+  if (src->tag == Tag_Var){
+    if (src->s0->tag != Tag_Lam){
+      printf("Error: Invalid tag for lam in move\n");
+      exit(1);
+    }
+    src->s0->s1 = dst;
+  }
+  if (src->tag == Tag_Lam && src->s1 != NULL){
+    src->s1->s0 = dst;
+  }
+  if (src->tag == Tag_Dup || src->tag == Tag_Dup2){
+    dst->s1->s1 = dst;
+  }
+}
 
 
 int step(Node* term){
@@ -196,18 +217,27 @@ int step(Node* term){
         case Tag_Lam:
           if (other->s1 != NULL){
             move(term->s1, other->s1);
+          }else{
+            free(term->s1);
           }
           move(other->s0, term);
           free(other);
           return 1;
+        case Tag_Dup:
+        case Tag_Dup2:
+          return step(other);
+        case Tag_Sup:{
+          Node** dups = dup(term->s1, other->label);
+          move(sup(app(other->s0, dups[0]), app(other->s1, dups[1]), other->label), term);
+          return 1;
+        }
         default: break;
       }
       break;
     case Tag_Sup: return step(other) || step(term->s1);      
     case Tag_Lam: return step(other);
 
-    case Tag_Dup:
-    case Tag_Dup2:{
+    case Tag_Dup: case Tag_Dup2:{
       Node* da = term->tag == Tag_Dup ? term : term->s1;
       Node* db = da->s1;
       switch (other->tag){
@@ -242,6 +272,17 @@ int step(Node* term){
             free(other);
             return 1;
           }
+        }
+        case Tag_Null:{
+          move(other, da);
+          move(new_node(Tag_Null, 0), db);
+          return 1;
+        }
+        case Tag_App:{
+          return step(other);
+        }
+        case Tag_Var:{
+          return 0;
         }
         default: break;
       }
@@ -291,9 +332,35 @@ Node* deserialize(int* data) {
 }
 
 int* work(int* graph_data, int steps){
+  // Install segfault handler
+  struct sigaction sa;
+  struct sigaction old_sa;
+  sa.sa_handler = segfault_handler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = 0;
+  sigaction(SIGSEGV, &sa, &old_sa);
+  
+  segfault_occurred = 0;
+  
+  // Set up recovery point
+  if (setjmp(segfault_jmp) != 0) {
+    // Segfault occurred - restore old handler and return error
+    sigaction(SIGSEGV, &old_sa, NULL);
+    fprintf(stderr, "SEGFAULT caught in C code\n");
+    // Return a special error value: [-1] indicates error
+    int* error_result = malloc(sizeof(int));
+    error_result[0] = -1;
+    return error_result;
+  }
+  
+  // Normal execution
   Node* node = deserialize(graph_data);
   run(node, steps);
   int* fmt = serialize(node);
+  
+  // Restore old handler
+  sigaction(SIGSEGV, &old_sa, NULL);
+  
   return fmt;
 }
 
