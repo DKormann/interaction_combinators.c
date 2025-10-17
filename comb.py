@@ -1,6 +1,8 @@
 import subprocess, ctypes, tempfile, os
 from node import Node, lam, x, app, sup, dup, var, null, Tag, hide_dups, print_tree, tree
 from run import step
+from typing import Callable
+
 
 
 def to_c(node:Node)->str:
@@ -49,35 +51,24 @@ def from_c(res:ctypes.POINTER(ctypes.c_int))->Node:
   return nodes[1]
 
 
-import time
 
 with open("main.c") as src: code_template = src.read()
 
-
-st = time.time_ns()
-
-print(f"open files time: {time.time_ns() - st}")
 os.makedirs("./.tmp", exist_ok=True)
 
 c_path = os.path.join("./.tmp", "main.c")
 so_path = os.path.join("./.tmp", "main.so")
 c_file = open(c_path, "w")
 
-print(f"file open done: {time.time_ns() - st}")
 
-
-from typing import Callable
 
 def get_worker(term:Node)->Callable[[int], Node]:
-  global code_template
-  code_template = code_template.replace("/*SETUP*/", to_c(term))
+
 
   c_file.seek(0)
-  c_file.write(code_template)
+  c_file.write(code_template.replace("/*SETUP*/", to_c(term)))
   c_file.truncate()
   c_file.flush()
-
-  code_template = code_template.replace("/*SETUP*/", "int c = 22;")
 
   subprocess.check_call(["clang", "-shared", "-O2", "-fPIC", c_path, "-o", so_path])
 
@@ -89,8 +80,6 @@ def get_worker(term:Node)->Callable[[int], Node]:
     res = lib.work(steps)
     return from_c(res)
 
-  print(f"worker created: {time.time_ns()-st}")
-
   return worker
 
 last_worker = None
@@ -101,11 +90,10 @@ def A(): return app(lam(sup(x(0), app(x(0), null()))), lam(x(0)))
 
 worker = get_worker(A())
 
-for i in range(3):
+for i in range(4):
   l = A()
-  node = worker(4)
+  node = worker(i)
 
-  print(f"don: {time.time_ns() - st}")
 
   hide_dups.set(False)
   print(node)

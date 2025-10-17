@@ -1,31 +1,23 @@
-# interaction_combinators.c
 
-Minimal C project scaffold.
 
-## Build
+## python IC
 
-- Debug (default):
+hierarchical layout
+generally usages point to values
+so positive ports point to negative.
 
-```bash
-make -C /Users/iainbanks/code/dkormann/interaction_combinators.c debug
-```
+eg:
 
-- Release:
+app points to fun and arg
+sup points to both values
+dup:
+  dup2 points to dup
+  dup points to dup2 and target
+lam:
+  points to body and var(!)
+var: points to lam
 
-```bash
-make -C /Users/iainbanks/code/dkormann/interaction_combinators.c release
-```
-
-## Run
-
-```bash
-make -C /Users/iainbanks/code/dkormann/interaction_combinators.c run
-```
-
-## Clean
-
-```bash
-make -C /Users/iainbanks/code/dkormann/interaction_combinators.c clean
-```
+var <-> lam connection:
+  var and lam point to each other and are pointed to from outside, meaning every time you move lam or var you need to update outside references
 
 
