@@ -26,9 +26,6 @@ typedef struct Node{
 
 
 
-/*SETUP*/
-
-
 typedef struct Queue{
   Node* node;
   int s0;
@@ -36,8 +33,6 @@ typedef struct Queue{
   struct Queue* next;
 } Queue;
 
-
-// Segfault handler globals
 static jmp_buf segfault_jmp;
 static volatile sig_atomic_t segfault_occurred = 0;
 
