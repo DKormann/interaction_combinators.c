@@ -31,3 +31,10 @@ var <-> lam connection:
   - [ ] full reduction (find all possible terms in final form)
   - [ ] garbage collection
   - [ ] parallel
+
+
+
+## citations
+
+[blog by enrico borba](https://ezb.io/thoughts/interaction_nets/lambda_calculus/2025-08-30_lazy-memory-layout.html)
+[gists by victor taelin](gist.github.com/VictorTaelin)
