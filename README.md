@@ -27,12 +27,13 @@ var <-> lam connection:
 
 ## TODO:
 
-[x] python runtime
-[ ] C runtime:
-  - [x] basic reduction (lazy)
-  - [ ] full reduction (find all possible terms in final form)
-  - [ ] garbage collection
-  - [ ] parallel
+ - [x] python runtime
+ - [x] parse python ast to C and convert back from C
+ - [ ] C runtime:
+    - [x] basic reduction (lazy)
+    - [ ] full reduction (find all possible terms in final form)
+    - [ ] garbage collection
+    - [ ] parallel
 
 
 
