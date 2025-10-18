@@ -198,16 +198,60 @@ void move(Node* src, Node* dst){
 
 
 
-int APP_LAM(Node* app, Node* lam){
-  if (lam->s1 != NULL){
-    move(app->s1, lam->s1);
+int APP_LAM(Node* App, Node* Lam){
+  if (Lam->s1 != NULL){
+    move(App->s1, Lam->s1);
   }else{
-    free(app->s1);
+    free(App->s1);
   }
-  move(app->s0, lam);
-  free(app);
+  move(Lam->s0, App);
+  free(Lam);
   return 1;
 }
+
+int APP_SUP(Node* App, Node* Sup){
+  Node** dups = dup(App->s1, Sup->label);
+  move(sup(app(Sup->s0, dups[0]), app(Sup->s1, dups[1]), Sup->label), App);
+  return 1;
+}
+
+int DUP_LAM(Node* da, Node* db, Node* Lam){
+  Node** dbody = dup(Lam->s0, da->label);
+  Node* funa = fun(dbody[0]);
+  Node* funb = fun(dbody[1]);
+  free(dbody);
+  if (Lam->s1 != NULL){
+    move(sup(funa->s1, funb->s1, da->label), Lam->s1);
+  }
+  move(funa, da);
+  move(funb, db);
+  return 1;
+}
+
+int DUP_SUP(Node* da, Node* db, Node* Sup){
+  if (Sup->label == da->label){
+
+    if (Sup->s0 == db || Sup->s1 == db){
+      move(Sup->s1, db);
+      move(Sup->s0, da);
+    }else{
+      move(Sup->s0, da);
+      move(Sup->s1, db);
+
+    }
+  } else {
+    Node** dup1 = dup(Sup->s0, da->label);
+    Node** dup2 = dup(Sup->s1, da->label);
+    move(sup(dup1[0], dup2[0], Sup->label), da);
+    move(sup(dup1[1], dup2[1], Sup->label), db);
+    free(dup1);
+    free(dup2);
+  }
+  free(Sup);
+  return 1;
+}
+
+
 
 
 int step(Node* term){
@@ -221,22 +265,10 @@ int step(Node* term){
   switch (term->tag){
     case Tag_App:
       switch (other->tag){
-        case Tag_Lam:
-          if (other->s1 != NULL){
-            move(term->s1, other->s1);
-          }else{
-            free(term->s1);
-          }
-          move(other->s0, term);
-          free(other);
-          return 1;
+        case Tag_Lam: return APP_LAM(term, other);
         case Tag_Dup:
-        case Tag_Dup2:
-          return step(other);
-        case Tag_Sup:{
-          Node** dups = dup(term->s1, other->label);
-          move(sup(app(other->s0, dups[0]), app(other->s1, dups[1]), other->label), term);
-          return 1;
+        case Tag_Dup2: return step(other);
+        case Tag_Sup:{ return APP_SUP(term, other);
         }
         default: break;
       }
@@ -249,36 +281,10 @@ int step(Node* term){
       Node* db = da->s1;
       switch (other->tag){
         case Tag_Lam:{
-          Node** dbody = dup(other->s0, term->label);
-          Node* ba = dbody[0];
-          Node* bb = dbody[1];
-          free(dbody);
-          Node* funa = fun(ba);
-          Node* funb = fun(bb);
-          if (other->s1 != NULL){
-            move(sup(funa->s1, funb->s1, term->label), other->s1);
-          }
-          move(funa, da);
-          move(funb, db);
-          return 1;
+          return DUP_LAM(da, db, other);
         }
-
         case Tag_Sup:{
-          if (other->label == da->label){
-            move(other->s0, da);
-            move(other->s1, db);
-            free(other);
-            return 1;
-          } else {
-            Node** dup1 = dup(other->s0, da->label);
-            Node** dup2 = dup(other->s1, da->label);
-            move(sup(dup1[0], dup2[0], other->label), da);
-            move(sup(dup1[1], dup2[1], other->label), db);
-            free(dup1);
-            free(dup2);
-            free(other);
-            return 1;
-          }
+          return DUP_SUP(da, db, other);
         }
         case Tag_Null:{
           move(other, da);
@@ -293,7 +299,6 @@ int step(Node* term){
         }
         default: break;
       }
-
       break;
     }
     default:break;

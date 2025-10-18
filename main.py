@@ -1,6 +1,6 @@
 import subprocess, ctypes, tempfile, os
-from node import Node, lam, x, app, sup, dup, var, null, Tag, hide_dups, tree
-from run import step
+from node import Node, lam, print_tree, x, app, sup, dup, var, null, Tag, hide_dups, tree
+from run import step, move
 from typing import Callable
 
 
@@ -89,20 +89,50 @@ def run_term_c(term: Node, steps: int = 100) -> Node:
 def c2():
   return lam(lam(app(x(1), app(x(1), x(0)))))
 
-node = app(c2(), c2())
+def id():
+  return lam(x(0))
 
+def circular1():
+  temp = null()
+  dups = dup(sup(temp, null(), 0), 0)
+  move(dups[0], temp)
+  return dups[1]
+
+
+def circular2():
+  temp = null()
+  dups = dup(sup(temp, null(), 0), 0)
+  move(dups[1], temp)
+  return dups[0]
+
+
+def circular3():
+  temp = null()
+  dups = dup(sup(null(), temp , 0), 0)
+  move(dups[1], temp)
+  return dups[0]
+
+
+def circular4():
+  temp = null()
+  dups = dup(sup(null(), temp , 0), 0)
+  move(dups[0], temp)
+  return dups[1]
+
+  
+
+node = circular4()
+
+
+print_tree.set(False)
+
+print(node)
 
 print(node)
 
 node = run_term_c(node, 100)
 
 print(node)
-# while True:
-#   prev = str(node)
-#   node = run_term_c(node, 1)
-#   if prev == str(node): break
-#   print(node)
-
 
 hide_dups.set(True)
 print(node)

@@ -34,6 +34,7 @@ implementing python runtime is quite
  - [x] parse python ast to C and convert back from C
  - [ ] C runtime:
     - [x] basic reduction (lazy)
+    - [x] circular DUP_SUP
     - [ ] full reduction (find all possible terms in final form)
     - [ ] garbage collection
     - [ ] parallel
