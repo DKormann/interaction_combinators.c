@@ -1,6 +1,8 @@
 
 
-## python IC
+## IC runtime
+
+its suprisingly easy to implement a full interaction based runtime in python and in C:
 
 hierarchical layout
 
