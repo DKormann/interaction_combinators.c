@@ -39,4 +39,5 @@ var <-> lam connection:
 ## citations
 
 [blog by enrico borba](https://ezb.io/thoughts/interaction_nets/lambda_calculus/2025-08-30_lazy-memory-layout.html)
+
 [gists by victor taelin](gist.github.com/VictorTaelin)
