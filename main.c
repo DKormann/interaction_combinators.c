@@ -197,6 +197,19 @@ void move(Node* src, Node* dst){
 }
 
 
+
+int APP_LAM(Node* app, Node* lam){
+  if (lam->s1 != NULL){
+    move(app->s1, lam->s1);
+  }else{
+    free(app->s1);
+  }
+  move(app->s0, lam);
+  free(app);
+  return 1;
+}
+
+
 int step(Node* term){
   if (term == NULL || term->tag == Tag_Null || term->tag == Tag_Var){
     return 0;
@@ -205,7 +218,6 @@ int step(Node* term){
   if (other == NULL){
     return 0;
   }
-  printf("step: %s -> %s\n", tag_name(term->tag), tag_name(other->tag));
   switch (term->tag){
     case Tag_App:
       switch (other->tag){

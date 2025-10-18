@@ -1,6 +1,6 @@
 
 
-from node import Node, lam, x, app, sup, dup, var, null, Tag, hide_dups, print_tree, tree, move, DEBUG
+from node import Node, lam, x, app, sup, dup, var, null, Tag, hide_dups, tree, move, DEBUG
 
 
 #%%

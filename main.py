@@ -1,5 +1,5 @@
 import subprocess, ctypes, tempfile, os
-from node import Node, lam, x, app, sup, dup, var, null, Tag, hide_dups, print_tree, tree
+from node import Node, lam, x, app, sup, dup, var, null, Tag, hide_dups, tree
 from run import step
 from typing import Callable
 
@@ -82,12 +82,8 @@ def run_term_c(term: Node, steps: int = 100) -> Node:
     return from_c_data(res)
   except RuntimeError as e:
     print(f"Error: {e}")
-    print("Returning original term")
     return term
 
-
-
-# def A(): return app(lam(sup(x(0), app(x(0), null()))), lam(x(0)))
 
 
 def c2():
@@ -97,11 +93,15 @@ node = app(c2(), c2())
 
 
 print(node)
-while True:
-  prev = str(node)
-  node = run_term_c(node, 1)
-  if prev == str(node): break
-  print(node)
+
+node = run_term_c(node, 100)
+
+print(node)
+# while True:
+#   prev = str(node)
+#   node = run_term_c(node, 1)
+#   if prev == str(node): break
+#   print(node)
 
 
 hide_dups.set(True)

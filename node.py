@@ -40,7 +40,7 @@ class Env:
 
 
 hide_dups = Env("hide_dups", False)
-print_tree = Env("print_tree", True)
+# print_tree = Env("print_tree", True)
 DEBUG = Env("DEBUG", False)
 
 
@@ -50,7 +50,7 @@ class Node:
     self.s0 = s0
     self.s1 = s1
     self.label = label
-  def __str__(self)->str: return (tree if print_tree else format_term)(self, {})
+  def __str__(self)->str: return tree(self, {})
   def __repr__(self)->str: return str(self)
 
 def x(var:int) -> Node: return Node(Tag.intermediate_var, label = var)
@@ -120,27 +120,6 @@ def parse_lam(lam:Node, current:Node, depth:int)->Node:
     case Tag.Dup | Tag.Dup2:
       parse_lam(lam, current.s0, depth)
 
-def format_term(term:Node, ctx: dict[Node, int])->str:
-  def varname(node:Node):
-    if node not in ctx: ctx[node] = chr(len(ctx) + 96)
-    return ctx[node]
-  ctx[None] = ""
-  match term.tag:
-    case Tag.Lam: return f"λ{varname(term.s1)}.{format_term(term.s0, ctx)}"
-    case Tag.App: return f"({format_term(term.s0, ctx)} {format_term(term.s1, ctx)})"
-    case Tag.Var: return varname(term)
-    case Tag.Dup | Tag.Dup2:
-      
-      if hide_dups: return format_term(term.s0, ctx)
-      d1 = term if (term.tag == Tag.Dup) else term.s1
-      if d1 in ctx: return varname(d1 if term == d1 else d1.s1)
-      a = varname(d1)
-      b = varname(d1.s1)
-      return f"&{{{a},{b}}} = {format_term(term.s0,ctx)}; {a if term==d1 else b}"
-    case Tag.Sup: return f"&{{{format_term(term.s0, ctx)}, {format_term(term.s1, ctx)}}}"
-    case Tag.Null: return "Nul"
-    case Tag.Prim: return str(term.label)
-  return str(term.tag)
 
 def tree(term:Node, ctx:dict[Node, int])->str:
   def varname(node:Node | None):
@@ -150,7 +129,7 @@ def tree(term:Node, ctx:dict[Node, int])->str:
     if sum(len(ln) for ln in lns) <= 20: return ["  " + " ".join(map(str.strip, lns))]
     return ["  " + ln for ln in lns]
   def prep(head:str, lns:list[str])->list[str]: return [head + " " + lns[0].strip()] + lns[1:]
-  def _tree(term:Node, dstack:list[tuple[int, bool]])->list[str]:
+  def _tree(term:Node | None, dstack:list[tuple[int, bool]])->list[str]:
     if term is None: return ["NONE"]
     match term.tag:
       case Tag.Lam: return prep(f"λ{varname(term.s1)}", _tree(term.s0, dstack))
@@ -159,7 +138,7 @@ def tree(term:Node, ctx:dict[Node, int])->str:
           if term.label == label:
             stack = dstack[:i] + dstack[i+1:]
             return _tree(term.s1 if is_dup2 else term.s0, stack)
-        return [term.tag.name + (f"{term.label}")] + idn(_tree(term.s0, dstack)) + idn(_tree(term.s1, dstack))
+        return ["sup" + (f"{term.label}")] + idn(_tree(term.s0, dstack)) + idn(_tree(term.s1, dstack))
       case Tag.App:
         return ["app"] + idn(_tree(term.s0, dstack)) + idn(_tree(term.s1, dstack))
       case Tag.Dup | Tag.Dup2:
