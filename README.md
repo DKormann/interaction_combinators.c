@@ -4,9 +4,10 @@
 
 its suprisingly easy to implement a full interaction based runtime in python and in C:
 
+the approach here is to view interaction calculus more as an AST as they would appear in a standart language not as the interaction combinator graph itself.
+this means terms point to their subterms. This is isomorphic to a subset of possible IC graphs namely those IC graphs corresponding to interaction calculus terms.
+
 hierarchical layout
-
-
 
 generally usages point to values
 so positive ports point to negative.
@@ -24,6 +25,8 @@ var: points to lam
 var <-> lam connection:
   var and lam point to each other and are pointed to from outside, meaning every time you move lam or var you need to update outside references
 
+
+implementing python runtime is quite 
 
 ## TODO:
 
