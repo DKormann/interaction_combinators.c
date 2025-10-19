@@ -28,49 +28,13 @@ def appn(a:Node, *arms):
   appn(app(a, arms[0]), *arms[1:])
 
 
-
-
-
-def mklam(builder:Callable[[Node], Node])->Node:
-
-  parents = {}
-  def arg_dups(arg:Node, src)->Node:
-    if arg in parents and parents[arg] != src:
-      vd = arg.dup()
-      parents[vd] = src
-      return vd
-    parents[arg] = src
-    if arg.tag in [Tag.Dup, Tag.Dup2, Tag.App, Tag.Sup, Tag.Lam]: arg.s0 = arg_dups(arg.s0, (arg, 0))
-    if arg.tag in [Tag.App, Tag.Sup]: arg.s1 = arg_dups(arg.s1, (arg, 1))
-    return arg
-  
-
-  l = Node(Tag.Lam, null(), None)
-  v = Node(Tag.Var, l)
-
-  bod = builder(v)
-  l.s0 = bod
-
-  arg_dups(l,None)
-  return l
-
-
-
-
-def Ycombinator()->Node:
-  return mklam(lambda f: app(f, app(f, f)))
-
-
-
-
-
-
 def fmt_eq(a:Node, b:Node):
   return str(a) == str(b)
 
 if __name__ == "__main__":
   from main import run_term_c
-  a = mklam(lambda x: app(x,x))
+  a = Node(lambda x, y: y)
+  a = a(1)
   hide_dups.set(True)
   print(a)
   hide_dups.set(False)

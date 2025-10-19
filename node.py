@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 from enum import Enum, auto
 from string import Formatter
+from typing import Callable
 
 class Tag(Enum):
   Null = auto()
@@ -51,21 +52,61 @@ hide_dups = Env("hide_dups", False)
 print_tree = Env("print_tree", True)
 DEBUG = Env("DEBUG", False)
 
-
-
-
 class Node:
-  def __init__(self, tag: Tag, s0:"Node" = None, s1:"Node" = None, label:int = None):
-    self.tag = tag
-    self.s0 = s0
-    self.s1 = s1
+  def __init__(self, tag: Tag | None | Callable | int = None, s0:"Node" = None, s1:"Node" = None, label:int = None):
+    if tag is None: tag = Tag.Null
+    self.s0 = None if s0 is None else Node.into(s0)
+    self.s1 = None if s1 is None else Node.into(s1)
     self.label = label
+    if isinstance(tag, Tag): self.tag = tag
+    else: move(Node.into(tag),self)
   def __str__(self)->str: return tree(self, {})
   def __repr__(self)->str: return str(self)
   def dup(self, label:int = None)->"Node":
     ds = dup(move(self), label)
     move(ds[0], self)
     return ds[1]
+
+  @staticmethod
+  def into(arg)->"Node":
+    if isinstance(arg, Node): return arg
+    if callable(arg):
+      parents = {}
+      def arg_dups(arg:Node, src)->Node:
+        if arg in parents and parents[arg] != src:
+          vd = arg.dup()
+          parents[vd] = src
+          return vd
+        parents[arg] = src
+        if arg.tag in [Tag.Dup, Tag.Dup2, Tag.App, Tag.Sup, Tag.Lam]: arg.s0 = arg_dups(arg.s0, (arg, 0))
+        if arg.tag in [Tag.App, Tag.Sup]: arg.s1 = arg_dups(arg.s1, (arg, 1))
+        return arg
+
+      l = Node(Tag.Lam, null(), None)
+      v = Node(Tag.Var, l)
+      l.s1 = v
+      l.s0 = Node.into(mk_curried(arg)(v))
+      arg_dups(l,None)
+      return l
+    if (isinstance(arg, int)): return Node(Tag.Prim, label = arg)
+    if arg is None: return Node(Tag.Null)
+  
+  def __call__(self, arg:"Node")->"Node":
+    return app(self, arg)
+
+
+
+def mk_curried(arg:Callable)->Callable:
+  args = []
+  def curried(x:Node)->Node:
+    args.append(x)
+    if len(args) == arg.__code__.co_argcount: return arg(*args)
+    return curried
+  return curried
+
+
+
+
 
 def x(var:int) -> Node: return Node(Tag.intermediate_var, label = var)
 
@@ -98,6 +139,8 @@ def dup(s0:Node, label:int = None)->tuple[Node, Node]:
   d2.s1 = d
   return d, d2
 
+
+
 def null(): return Node(Tag.Null)
 
 
@@ -118,7 +161,7 @@ def move(src:Node, dst:Node | None = None)->Node:
     lam = src.s0
     assert lam.tag == Tag.Lam
     lam.s1 = dst
-  if src.tag == Tag.Lam:
+  if src.tag == Tag.Lam and src.s1 is not None:
     dst.s1.s0 = dst
   if src.tag in [Tag.Dup, Tag.Dup2]:
     dst.s1.s1 =dst
