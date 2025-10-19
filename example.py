@@ -1,0 +1,80 @@
+
+from typing import Callable
+from node import Node, Tag, app, hide_dups, lam, move, null, parse_lam, print_tree, sup, x, dup
+
+def id(): return lam(x(0))
+
+def T()->Node: return lam(lam(x(1)))
+def F()->Node: return lam(lam(x(0)))
+
+def cnat(n:int):
+  def go(n:int):
+    if n == 0: return x(0)
+    return app(x(1), go(n-1))
+  return lam(lam(go(n)))
+
+def circular(option1:int, option2:int):
+  aux = [null(), null()]
+  dups = dup(sup(aux[0], aux[1], 0), 0)
+  move(dups[option1], aux[option2])
+  return dups[not option1]
+
+def snat(n:int):
+  if n == 0: return lam(lam(x(0)))
+  return lam(lam(app(x(1), snat(n-1))))
+
+def appn(a:Node, *arms):
+  if not arms: return a
+  appn(app(a, arms[0]), *arms[1:])
+
+
+
+
+
+def mklam(builder:Callable[[Node], Node])->Node:
+
+  parents = {}
+  def arg_dups(arg:Node, src)->Node:
+    if arg in parents and parents[arg] != src:
+      vd = arg.dup()
+      parents[vd] = src
+      return vd
+    parents[arg] = src
+    if arg.tag in [Tag.Dup, Tag.Dup2, Tag.App, Tag.Sup, Tag.Lam]: arg.s0 = arg_dups(arg.s0, (arg, 0))
+    if arg.tag in [Tag.App, Tag.Sup]: arg.s1 = arg_dups(arg.s1, (arg, 1))
+    return arg
+  
+
+  l = Node(Tag.Lam, null(), None)
+  v = Node(Tag.Var, l)
+
+  bod = builder(v)
+  l.s0 = bod
+
+  arg_dups(l,None)
+  return l
+
+
+
+
+def Ycombinator()->Node:
+  return mklam(lambda f: app(f, app(f, f)))
+
+
+
+
+
+
+def fmt_eq(a:Node, b:Node):
+  return str(a) == str(b)
+
+if __name__ == "__main__":
+  from main import run_term_c
+  a = mklam(lambda x: app(x,x))
+  hide_dups.set(True)
+  print(a)
+  hide_dups.set(False)
+  print(a)
+
+
+  # print(circular(0, 1))

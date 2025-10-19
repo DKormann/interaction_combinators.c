@@ -1,4 +1,5 @@
 
+from contextlib import contextmanager
 from enum import Enum, auto
 from string import Formatter
 
@@ -38,10 +39,19 @@ class Env:
   def __lt__(self, other)->bool: return self.value < int(other)
   def __eq__(self, other)->bool: return self.value == int(other)
 
+  @contextmanager
+  def context(self, value: int):
+    old_value = self.value
+    self.value = value
+    try: yield
+    finally: self.value = old_value
+
 
 hide_dups = Env("hide_dups", False)
 print_tree = Env("print_tree", True)
 DEBUG = Env("DEBUG", False)
+
+
 
 
 class Node:
@@ -52,6 +62,10 @@ class Node:
     self.label = label
   def __str__(self)->str: return tree(self, {})
   def __repr__(self)->str: return str(self)
+  def dup(self, label:int = None)->"Node":
+    ds = dup(move(self), label)
+    move(ds[0], self)
+    return ds[1]
 
 def x(var:int) -> Node: return Node(Tag.intermediate_var, label = var)
 
@@ -59,11 +73,16 @@ def num(n:int) -> Node: return Node(Tag.Prim, label = n)
 
 def var(lam:Node) -> Node:
   lam.s1 = Node(Tag.Var, lam)
+  lam.s1.s0 = lam
   return lam.s1
 
 def app(func:Node, arg:Node) -> Node: return Node(Tag.App, func, arg)
 
 ilab = 70
+
+def reset_labels():
+  global ilab
+  ilab = 70
 
 def sup(a:Node, b:Node, label:int = None)->Node:
   global ilab
@@ -87,7 +106,10 @@ def lam(body:Node) -> Node:
   parse_lam(res, body, 0)
   return res
 
-def move(src:Node, dst:Node )->Node:
+def move(src:Node, dst:Node | None = None)->Node:
+  if dst is None: dst = Node(None)
+  if isinstance(src, list) or isinstance(src, tuple): return [move(s, d) for s, d in zip(src, dst)]
+
   dst.tag = src.tag
   dst.s0 = src.s0
   dst.s1 = src.s1
@@ -102,24 +124,19 @@ def move(src:Node, dst:Node )->Node:
     dst.s1.s1 =dst
   return dst
 
-def parse_lam(lam:Node, current:Node, depth:int)->Node:
-  match current.tag:
-    case Tag.Lam:
-      parse_lam(lam, current.s0, depth + 1)
-    case Tag.intermediate_var if current.label == depth:
-      if (lam.s1):
-        a,b = dup(Node(Tag.Var, lam))
-        move(a, lam.s1)
-        move(b, current)
-        lam.s1 = a.s0
-      else:
-        lam.s1 = move(Node(Tag.Var, lam), current)
-    case Tag.App | Tag.Sup:
-      parse_lam(lam, current.s0, depth)
-      parse_lam(lam, current.s1, depth)
-    case Tag.Dup | Tag.Dup2:
-      parse_lam(lam, current.s0, depth)
 
+
+def parse_lam(lam:Node, current:Node, depth:int):
+  print("parse_lam", current.tag)
+  if current.tag == Tag.Lam: parse_lam(lam, current.s0, depth + 1)
+  elif current.tag in [Tag.App, Tag.Sup]: parse_lam(lam, current.s1, depth)
+  elif current.tag in [Tag.Dup, Tag.Dup2, Tag.App, Tag.Sup]: parse_lam(lam, current.s0, depth)
+  elif ((current.tag == Tag.intermediate_var and current.label == depth) or
+        (current.tag == Tag.Var and current.s0 == lam and lam.s1 is not current)):
+    if lam.s1 is None: move(var(lam), current)
+    else:
+      prev = lam.s1
+      move(dup(var(lam)), [prev,current])
 
 
 
