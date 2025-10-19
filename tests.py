@@ -13,25 +13,24 @@ def assert_fmt(term:Node, expected:str):
 
 def assert_normal_fmt(term:Node, expected:str):
   term = run_term_c(term)
-  assert_fmt(term, expected)
-  hide_dups.set(True)
-  assert_fmt(
-    cnat(2),
-    "λa λb app a app a b"
-  )
-  hide_dups.set(False)
-  reset_labels()
-  assert_fmt(
-    cnat(2),
-    "λa λb app 71{c, d} = a in c app d b"
-  )
-    
+  assert_fmt(term, expected)    
 
 
 class TestFormat(unittest.TestCase):
   def test_fmt(self):
     term = lam(x(0))
     assert_fmt(term, "λa a")
+  
+  def test_fmt_app(self):
+    term = Node(lambda x: x)
+    assert_fmt(term, "λa a")
+    assert_fmt(term(1), "app λa a 1")
+
+  def test_fmt_cnat(self):
+    term = cnat(1)
+    with hide_dups.context(False):
+      assert_fmt(term, "λa λb app a b")
+      assert_fmt(cnat(2), "λa λb app &71{c, d} = a in c app d b")
 
 class TestCircular(unittest.TestCase):
   

@@ -71,28 +71,31 @@ class Node:
   def into(arg)->"Node":
     if isinstance(arg, Node): return arg
     if callable(arg):
-      parents = {}
-      def arg_dups(arg:Node, src)->Node:
-        if arg in parents and parents[arg] != src:
-          vd = arg.dup()
-          parents[vd] = src
-          return vd
-        parents[arg] = src
-        if arg.tag in [Tag.Dup, Tag.Dup2, Tag.App, Tag.Sup, Tag.Lam]: arg.s0 = arg_dups(arg.s0, (arg, 0))
-        if arg.tag in [Tag.App, Tag.Sup]: arg.s1 = arg_dups(arg.s1, (arg, 1))
-        return arg
 
       l = Node(Tag.Lam, null(), None)
       v = Node(Tag.Var, l)
       l.s1 = v
       l.s0 = Node.into(mk_curried(arg)(v))
-      arg_dups(l,None)
+
+      found = False
+      def arg_dups(arg:Node):
+        nonlocal found
+        if arg == v:
+          if found: return v.dup()
+          found = True
+        if arg.tag in [Tag.Dup, Tag.Dup2, Tag.App, Tag.Sup, Tag.Lam]: arg.s0 = arg_dups(arg.s0)
+        if arg.tag in [Tag.App, Tag.Sup]: arg.s1 = arg_dups(arg.s1)
+        return arg
+
+      arg_dups(l.s0)
+      if not found: l.s1 = None
       return l
     if (isinstance(arg, int)): return Node(Tag.Prim, label = arg)
     if arg is None: return Node(Tag.Null)
   
-  def __call__(self, arg:"Node")->"Node":
-    return app(self, arg)
+  def __call__(self, *args:"Node")->"Node":
+    if not args: return self
+    return app(self, args[0])(*args[1:])
 
 
 
@@ -209,7 +212,7 @@ def tree(term:Node, ctx:dict[Node, int])->str:
         d1 = term if (term.tag == Tag.Dup) else term.s1
         if d1 in ctx: return [varname(term)]
 
-        return [f"{term.label}{{{varname(d1)}, {varname(d1.s1)}}} ="] + idn(_tree(term.s0, dstack)) + idn([f"in {varname(term)}"])
+        return [f"&{term.label}{{{varname(d1)}, {varname(d1.s1)}}} ="] + idn(_tree(term.s0, dstack)) + idn([f"in {varname(term)}"])
 
       case Tag.Prim: return [str(term.label)]
       case Tag.Null: return ["Nul"]
