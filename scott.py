@@ -2,6 +2,7 @@
 Scott encoding for natural numbers and functions on them
 """
 
+from operator import truediv
 from example import F, T
 from main import run_term_c
 from node import Node, Tag, app, hide_dups, lam, move, null, parse_lam, print_tree, sup, x, dup
@@ -17,29 +18,6 @@ def Y_comb()->Node:
 
 
 
-def is_z()->Node:
-  return Node(lambda n: n(
-    lambda s: F(),
-    T()
-  ))
-
-# print(is_z())
-
-
-
-def copyn()->Node:
-  return Node(
-    lambda self, n: n(
-      lambda s: nat(1),
-      nat(0)
-    )
-  )
-
-# print(Y_comb())
-
-# c = Y_comb()(copyn())(nat(1))
-
-# print(c)
 
 def linear_check(term:Node):
   c = {}
@@ -74,18 +52,36 @@ def linear_check(term:Node):
 
 
 
+def is_z()->Node:
+  return Node(lambda n: n(
+    lambda s: F(),
+    T()
+  ))
+
+# print(is_z())
 
 
-# c = Y_comb()(copyn())(nat(1))
 
-c = Y_comb()
+def copyn()->Node:
+  return Node(
+    lambda self, n: n(
+      lambda s: self(s),
+      nat(0)
+    )
+  )
 
-c = Node( lambda x: x(x))
+
+
+
+
+c = Y_comb()(copyn())(nat(2))
+
+
 
 print(c)
 
-for i in range(1):
-  c = run_term_c(c,0)
+for i in range(4):
+  c = run_term_c(c,1)
   hide_dups.set(False)
   print(c)
   if not linear_check(c): break

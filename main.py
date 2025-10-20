@@ -76,12 +76,10 @@ lib.work.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
 lib.work.restype = ctypes.POINTER(ctypes.c_int)
 
 def run_term_c(term: Node, steps: int = 100) -> Node:
-  try:
-    graph_data = to_c_data(term)
-    res = lib.work((ctypes.c_int * len(graph_data))(*graph_data), steps)
-    return from_c_data(res)
-  except RuntimeError as e:
-    print(f"Error: {e}")
-    return term
+
+  graph_data = to_c_data(term)
+  res = lib.work((ctypes.c_int * len(graph_data))(*graph_data), steps)
+  return from_c_data(res)
+
 
 

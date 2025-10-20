@@ -12,7 +12,10 @@ int tag_counters[7];
 int DEBUG = 1;
 
 void debug(char* content){
-  printf("%s", content);
+  if (DEBUG){
+
+    printf("%s", content);
+  }
 }
 
 typedef enum Tag{
@@ -180,7 +183,10 @@ Node* app(Node* f, Node* x){
 }
 
 
-void move(Node* src, Node* dst){
+
+
+
+void just_move(Node* src, Node* dst){
 
   tag_counters[src->tag] ++;
   tag_counters[dst->tag] --;
@@ -205,9 +211,18 @@ void move(Node* src, Node* dst){
   }
 }
 
+void move(Node* src, Node* dst){
+  just_move(src,dst);
+  free_node(src);
+}
+
+
+
+
 
 
 void erase(Node* node){
+  printf("Erasing node %s %d\n", tag_name(node->tag), node->label);
   switch (node->tag){
     case Tag_App:
     case Tag_Sup: erase(node->s1);
@@ -220,7 +235,6 @@ void erase(Node* node){
     case Tag_Dup:
     case Tag_Dup2: 
       move(node->s0, node->s1);
-      free_node(node->s0);
       break;
     case Tag_Null: break;
   };
@@ -235,12 +249,12 @@ int APP_LAM(Node* App, Node* Lam){
     erase(App->s1);
   }
   move(Lam->s0, App);
-  // free_node(Lam->s0);
   free_node(Lam);
   return 1;
 }
 
 int APP_SUP(Node* App, Node* Sup){
+  debug("APP_SUP\n");
   Node** dups = dup(App->s1, Sup->label);
   move(sup(app(Sup->s0, dups[0]), app(Sup->s1, dups[1]), Sup->label), App);
   return 1;
@@ -264,14 +278,17 @@ int DUP_LAM(Node* da, Node* db, Node* Lam){
     funb->s1->s0 = funb;
     move(sup(funa->s1, funb->s1, da->label), Lam->s1);
   }else{
+    printf("TODO: handle null var lam\n");
 
   }
+  free_node(Lam);
   move(funa, da);
   move(funb, db);
   return 1;
 }
 
 int DUP_SUP(Node* da, Node* db, Node* Sup){
+  debug("DUP_SUP\n");
   if (Sup->label == da->label){
 
     if (Sup->s0 == db || Sup->s1 == db){
@@ -331,8 +348,8 @@ int step(Node* term){
           return DUP_SUP(da, db, other);
         }
         case Tag_Null:{
-          move(other, da);
-          move(new_node(Tag_Null, 0), db);
+          just_move(other, da);
+          move(other, da);          
           return 1;
         }
         case Tag_App:{
@@ -408,24 +425,27 @@ int* work(int* graph_data, int steps){
   // Normal execution
   Node* node = deserialize(graph_data);
 
-  for (int i =0; i<7; i++){
-    if (tag_counters[i]){
-      printf("%s : %d\n", tag_name(i), tag_counters[i]);
-    }
-  }
-
   run(node, steps);
   int* fmt = serialize(node);
   erase(node);
-  printf("work done. nodes: %d\n", node_counter);
-  for (int i =0; i<7; i++){
-    if (tag_counters[i]){
-      printf("%s : %d\n", tag_name(i), tag_counters[i]);
+
+
+  sigaction(SIGSEGV, &old_sa, NULL);
+
+
+  if (node_counter != 0){
+    // printf("workd done. nodes left %d\n", node_counter);
+    fprintf(stderr, "workd done. nodes left %d\n", node_counter);
+
+    for (int i =0; i<7; i++){
+      if (tag_counters[i]){
+        printf("%s : %d\n", tag_name(i), tag_counters[i]);
+      }
     }
+    // exit(1);
   }
   
-  // Restore old handler
-  sigaction(SIGSEGV, &old_sa, NULL);
+
 
   
   return fmt;
