@@ -20,15 +20,6 @@ def circular(option1:int, option2:int):
   move(dups[option1], aux[option2])
   return dups[not option1]
 
-def snat(n:int):
-  if n == 0: return Node(lambda s,z: z)
-  return Node(lambda s,z: s(snat(n-1)))
-
-
-def appn(a:Node, *arms):
-  if not arms: return a
-  appn(app(a, arms[0]), *arms[1:])
-
 
 def fmt_eq(a:Node, b:Node):
   return str(a) == str(b)

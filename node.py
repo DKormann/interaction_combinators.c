@@ -191,21 +191,21 @@ def tree(term:Node, ctx:dict[Node, int])->str:
   def varname(node:Node | None):
     if node is None: return ""
     return ctx.setdefault(node, chr(len(ctx) + 97))
-  def idn(lns:list[str])->list[str]:
+  def idn(lns:list[str], end = "")->list[str]:
+    lns = lns[:-1] + [lns[-1] + end]
     if sum(len(ln) for ln in lns) <= 20: return [ws + " ".join(map(str.strip, lns))]
     return [ws + ln for ln in lns]
+
   def _tree(term:Node | None, dstack:list[tuple[int, bool]])->list[str]:
     if term is None: return ["NONE"]
     match term.tag:
       case Tag.Lam: return [f"λ{varname(term.s1)} " + (p := _tree(term.s0, dstack))[0].strip()] + p[1:]
       case Tag.Sup:
         for i, (label, is_dup2) in reversed(list(enumerate(dstack))):
-          if term.label == label:
-            stack = dstack[:i] + dstack[i+1:]
-            return _tree(term.s1 if is_dup2 else term.s0, stack)
-        return ["sup" + (f"{term.label}")] + idn(_tree(term.s0, dstack)) + idn(_tree(term.s1, dstack))
-      case Tag.App:
-        return ["app"] + idn(_tree(term.s0, dstack)) + idn(_tree(term.s1, dstack))
+          if term.label == label: return _tree(term.s1 if is_dup2 else term.s0, dstack[:i] + dstack[i+1:])
+        return [f"&{term.label}{{"] + idn(_tree(term.s0, dstack)) + idn(_tree(term.s1, dstack), "}")
+        
+      case Tag.App: return [f"("] + idn(_tree(term.s0, dstack)) + idn(_tree(term.s1, dstack), ")")
       case Tag.Dup | Tag.Dup2:
         if hide_dups: return _tree(term.s0, dstack + ([(term.label, term.tag == Tag.Dup2)]))
 

@@ -1,6 +1,9 @@
 import unittest
 
 from example import circular, cnat
+
+# from functions import scott
+import scott  
 from main import run_term_c
 from node import Node, hide_dups, lam, print_tree, reset_labels, x
 
@@ -31,6 +34,11 @@ class TestFormat(unittest.TestCase):
     with hide_dups.context(False):
       assert_fmt(term, "λa λb app a b")
       assert_fmt(cnat(2), "λa λb app &71{c, d} = a in c app d b")
+    
+  def test_fmt_snat(self):
+    assert_fmt(scott.nat(0), "λ λa a")
+    assert_fmt(scott.nat(1), "λa λ app a λ λb b")
+
 
 class TestCircular(unittest.TestCase):
   

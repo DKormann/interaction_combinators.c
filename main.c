@@ -268,8 +268,9 @@ int step(Node* term){
         case Tag_Lam: return APP_LAM(term, other);
         case Tag_Dup:
         case Tag_Dup2: return step(other);
-        case Tag_Sup:{ return APP_SUP(term, other);
-        }
+        case Tag_Sup: return APP_SUP(term, other);
+        case Tag_App: return step(other);
+        case Tag_Var: return 0;
         default: break;
       }
       break;
