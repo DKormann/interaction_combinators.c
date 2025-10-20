@@ -150,14 +150,14 @@ Node** dup(Node* target, int label){
   return res;
 }
 
-Node* fun(Node* body){
-  Node* var = new_node(Tag_Var, 0);
-  Node* res = new_node(Tag_Lam, 0);
-  res->s0 = body;
-  res->s1 = var;
-  var->s0 = res;
-  return res;
-}
+// Node* fun(Node* body){
+//   Node* var = new_node(Tag_Var, 0);
+//   Node* res = new_node(Tag_Lam, 0);
+//   res->s0 = body;
+//   res->s1 = var;
+//   var->s0 = res;
+//   return res;
+// }
 
 Node* sup(Node* a, Node* b, int label){
   Node* res = new_node(Tag_Sup, label);
@@ -217,10 +217,19 @@ int APP_SUP(Node* App, Node* Sup){
 
 int DUP_LAM(Node* da, Node* db, Node* Lam){
   Node** dbody = dup(Lam->s0, da->label);
-  Node* funa = fun(dbody[0]);
-  Node* funb = fun(dbody[1]);
+  // Node* funa = fun(dbody[0]);
+  // Node* funb = fun(dbody[1]);
+  Node* funa = new_node(Tag_Lam,0);
+  Node* funb = new_node(Tag_Lam,0);
+  funa->s0 = dbody[0];
+  funb->s0 = dbody[1];
+  
   free(dbody);
   if (Lam->s1 != NULL){
+    funa->s1 = new_node(Tag_Var, 0);
+    funa->s1->s0 = funa;
+    funb->s1 = new_node(Tag_Var, 0);
+    funb->s1->s0 = funb;
     move(sup(funa->s1, funb->s1, da->label), Lam->s1);
   }
   move(funa, da);

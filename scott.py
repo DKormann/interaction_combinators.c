@@ -35,16 +35,54 @@ def copyn()->Node:
     )
   )
 
+# print(Y_comb())
+
+# c = Y_comb()(copyn())(nat(1))
+
+# print(c)
+
+def linear_check(term:Node):
+  c = {}
+
+
+  def toggle(term:Node):
+    if term is None: return
+
+    if term in c: del c[term]
+    else: c[term] = True
+  
+  def go(term:Node):
+    match term.tag:
+      case Tag.Dup: toggle(term)
+      case Tag.Dup2:
+        toggle(term.s1)
+        return
+      case Tag.Lam: toggle(term.s1)
+      case Tag.Var: toggle(term)
+    
+    for src in term.srcs(): go(src)
+  
+  go(term)
+
+  if len(c) == 0: return True
+  for v in c:
+    print('-'*10, 'linear check FAIL')
+    print(v)
+    print(v.s0)
+  print(c)
+  
+
+
+
+
+
 c = Y_comb()(copyn())(nat(1))
 
-# hide_dups.set(True)
-print(c)
+for i in range(10):
+  c = run_term_c(c,1)
+  print(c)
+  if not linear_check(c): break
+  print('-'*10, 'linear check passed')
 
-c = run_term_c(c)
-
-
-print(c)
-
-print(sup(null(), null()))
-
+# print(c)
 

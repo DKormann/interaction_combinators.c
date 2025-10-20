@@ -66,6 +66,12 @@ class Node:
     ds = dup(move(self), label)
     move(ds[0], self)
     return ds[1]
+  def srcs(self):
+    res = []
+    if self.tag in [Tag.Lam, Tag.Dup, Tag.Dup2, Tag.App, Tag.Sup]: res.append(self.s0)
+    if self.tag in [Tag.App, Tag.Sup]: res.append(self.s1)
+    return res
+
 
   @staticmethod
   def into(arg)->"Node":
