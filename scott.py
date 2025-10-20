@@ -76,13 +76,19 @@ def linear_check(term:Node):
 
 
 
-c = Y_comb()(copyn())(nat(1))
+# c = Y_comb()(copyn())(nat(1))
 
-for i in range(10):
-  c = run_term_c(c,1)
+c = Y_comb()
+
+c = Node( lambda x: x(x))
+
+print(c)
+
+for i in range(1):
+  c = run_term_c(c,0)
+  hide_dups.set(False)
   print(c)
   if not linear_check(c): break
   print('-'*10, 'linear check passed')
 
-# print(c)
 

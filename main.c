@@ -6,6 +6,14 @@
 #include <setjmp.h>
 
 
+int node_counter = 0;
+int tag_counters[7];
+
+int DEBUG = 1;
+
+void debug(char* content){
+  printf("%s", content);
+}
 
 typedef enum Tag{
   Tag_App,
@@ -55,12 +63,11 @@ char* tag_name(int tag){
   return "UNK tag";
 }
 
-int enqueue(Queue* queue, Node* node, int * ctr){
+int _enqueue(Queue* queue, Node* node, int * ctr){
   if (node == NULL){
     return 0;
   }
 
-  
   int n = 0;
   
   while (1){
@@ -94,12 +101,10 @@ int* serialize(Node* node){
 
   while (current != NULL){
     Node* node = current->node;
-    current -> s0 = enqueue(queue, node->s0, &ctr);
-    current -> s1 = enqueue(queue, node->s1, &ctr);
+    current -> s0 = _enqueue(queue, node->s0, &ctr);
+    current -> s1 = _enqueue(queue, node->s1, &ctr);
     current = current->next;
   }
-
-
 
   int* result = malloc(sizeof(int) * (ctr + 1) * 4);
   current = queue;
@@ -129,12 +134,22 @@ int* serialize(Node* node){
 
 
 Node* new_node(Tag tag, int label){
+  node_counter++;
+
+  tag_counters[tag] ++ ;
+
   Node* node = malloc(sizeof(Node));
   node->tag = tag;
   node->label = label;
   node->s0 = NULL;
   node->s1 = NULL;
   return node;
+}
+
+void free_node(Node* node){
+  node_counter--;
+  tag_counters[node->tag] --;
+  free(node);
 }
 
 Node** dup(Node* target, int label){
@@ -149,15 +164,6 @@ Node** dup(Node* target, int label){
   res[1] = dup2;
   return res;
 }
-
-// Node* fun(Node* body){
-//   Node* var = new_node(Tag_Var, 0);
-//   Node* res = new_node(Tag_Lam, 0);
-//   res->s0 = body;
-//   res->s1 = var;
-//   var->s0 = res;
-//   return res;
-// }
 
 Node* sup(Node* a, Node* b, int label){
   Node* res = new_node(Tag_Sup, label);
@@ -175,6 +181,9 @@ Node* app(Node* f, Node* x){
 
 
 void move(Node* src, Node* dst){
+
+  tag_counters[src->tag] ++;
+  tag_counters[dst->tag] --;
 
   dst->tag = src->tag;
   dst->s0 = src->s0;
@@ -198,14 +207,36 @@ void move(Node* src, Node* dst){
 
 
 
+void erase(Node* node){
+  switch (node->tag){
+    case Tag_App:
+    case Tag_Sup: erase(node->s1);
+    case Tag_Lam:
+      erase(node->s0);
+      break;
+    case Tag_Var:
+      node->s0->s1 = NULL;
+      break;
+    case Tag_Dup:
+    case Tag_Dup2: 
+      move(node->s0, node->s1);
+      free_node(node->s0);
+      break;
+    case Tag_Null: break;
+  };
+  free_node(node);
+}
+
 int APP_LAM(Node* App, Node* Lam){
+  debug("APP_LAM\n");
   if (Lam->s1 != NULL){
     move(App->s1, Lam->s1);
   }else{
-    free(App->s1);
+    erase(App->s1);
   }
   move(Lam->s0, App);
-  free(Lam);
+  // free_node(Lam->s0);
+  free_node(Lam);
   return 1;
 }
 
@@ -215,10 +246,11 @@ int APP_SUP(Node* App, Node* Sup){
   return 1;
 }
 
+
+
 int DUP_LAM(Node* da, Node* db, Node* Lam){
+  debug("DUPLAM\n");
   Node** dbody = dup(Lam->s0, da->label);
-  // Node* funa = fun(dbody[0]);
-  // Node* funb = fun(dbody[1]);
   Node* funa = new_node(Tag_Lam,0);
   Node* funb = new_node(Tag_Lam,0);
   funa->s0 = dbody[0];
@@ -231,6 +263,8 @@ int DUP_LAM(Node* da, Node* db, Node* Lam){
     funb->s1 = new_node(Tag_Var, 0);
     funb->s1->s0 = funb;
     move(sup(funa->s1, funb->s1, da->label), Lam->s1);
+  }else{
+
   }
   move(funa, da);
   move(funb, db);
@@ -256,7 +290,7 @@ int DUP_SUP(Node* da, Node* db, Node* Sup){
     free(dup1);
     free(dup2);
   }
-  free(Sup);
+  free_node(Sup);
   return 1;
 }
 
@@ -332,11 +366,7 @@ Node* deserialize(int* data) {
   
   for (int i = 0; i < count; i++) {
     int idx = i * 4 + 1;
-    Node* node = malloc(sizeof(Node));
-    node->tag = data[idx];
-    node->label = data[idx + 1];
-    node->s0 = NULL;
-    node->s1 = NULL;
+    Node* node = new_node(data[idx], data[idx + 1]);
     nodes[i + 1] = node;
   }
   
@@ -377,11 +407,26 @@ int* work(int* graph_data, int steps){
   
   // Normal execution
   Node* node = deserialize(graph_data);
+
+  for (int i =0; i<7; i++){
+    if (tag_counters[i]){
+      printf("%s : %d\n", tag_name(i), tag_counters[i]);
+    }
+  }
+
   run(node, steps);
   int* fmt = serialize(node);
+  erase(node);
+  printf("work done. nodes: %d\n", node_counter);
+  for (int i =0; i<7; i++){
+    if (tag_counters[i]){
+      printf("%s : %d\n", tag_name(i), tag_counters[i]);
+    }
+  }
   
   // Restore old handler
   sigaction(SIGSEGV, &old_sa, NULL);
+
   
   return fmt;
 }
