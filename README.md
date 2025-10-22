@@ -37,6 +37,7 @@ implementing python runtime is quite
     - [x] circular DUP_SUP
     - [x] full reduction (find all possible terms in final form)
     - [ ] garbage collection
+      - [ ] correctly collect dup targets
     - [ ] parallel
 
 

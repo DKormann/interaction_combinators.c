@@ -74,6 +74,8 @@ def copyn()->Node:
 
 
 
+
+
 c = Y_comb()(copyn())(nat(2))
 
 

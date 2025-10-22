@@ -75,6 +75,14 @@ lib = ctypes.CDLL(so_path)
 lib.work.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
 lib.work.restype = ctypes.POINTER(ctypes.c_int)
 
+lib.print_term_c.argtypes = [ctypes.POINTER(ctypes.c_int)]
+lib.print_term_c.restype = None
+
+
+def print_term_c(term: Node):
+  graph_data = to_c_data(term)
+  lib.print_term_c((ctypes.c_int * len(graph_data))(*graph_data))
+
 def run_term_c(term: Node, steps: int = 100) -> Node:
 
   graph_data = to_c_data(term)
@@ -82,4 +90,16 @@ def run_term_c(term: Node, steps: int = 100) -> Node:
   return from_c_data(res)
 
 
+if __name__ == "__main__":
+  # term = Node(lambda x, y: y)
+  # print(term)
+  # print_term_c(term)
+  term = dup(sup(null(), null(), 0), 0)[0]
+  term = dup(sup(sup(null(), null(), 0), null(), 0), 0) [0]
 
+
+  # print_term_c(ds[0])
+
+  print(term)
+
+  run_term_c(term)

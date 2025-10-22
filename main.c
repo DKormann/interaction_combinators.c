@@ -6,6 +6,27 @@
 #include <setjmp.h>
 
 
+typedef enum{
+  Tree_Leaf,
+  Tree_Node,
+} TreeType;
+
+typedef struct BTree{
+  TreeType type;
+  struct BTree* left;
+  struct BTree* right;
+} BTree;
+
+void insert_btree(BTree* tree, int label){
+  if (tree->type == Tree_Leaf){
+    tree->type = Tree_Node;
+    tree->left = malloc(sizeof(BTree));
+    tree->right = malloc(sizeof(BTree));
+    if ()
+  }
+
+
+
 int node_counter = 0;
 int tag_counters[7];
 
@@ -217,9 +238,95 @@ void move(Node* src, Node* dst){
 }
 
 
+typedef struct DupStack{
+  int label;
+  int is_dup2;
+  struct DupStack* next;
+} DupStack;
+
+
+void print_stack(DupStack* stack){
+  printf("[");
+  while (stack != NULL){
+    printf("%d ", stack->label);
+    stack = stack->next;
+  }
+  printf("]\n");
+}
+
+
+void deepwalk(Node* node, void callback (Node*), DupStack* stack){
+  switch (node->tag){
+    case Tag_App:
+      deepwalk(node->s0, callback, stack);
+      deepwalk(node->s1, callback, stack);
+      break;
+    case Tag_Sup:{
+      DupStack* head = malloc(sizeof(DupStack));
+      DupStack* current = head;
+      current->next = stack;
+      while (current->next != NULL){
+
+        if (current->next->label == node->label){
+          DupStack* matched = current->next;
+          current->next = current->next->next;
+          deepwalk(matched->is_dup2 ? node->s1 : node->s0, callback, head->next);
+          current->next = matched;
+          free(head);
+          callback(node);
+          return;
+        }
+        current = current->next;
+      }
+      deepwalk(node->s0, callback, stack);
+      deepwalk(node->s1, callback, stack);
+      free(head);
+      break;
+    }
+    case Tag_Dup:
+    case Tag_Dup2:{
+      DupStack newstack = {node->label, node->tag == Tag_Dup2, stack};
+      deepwalk(node->s0, callback, &newstack);
+      break;
+    }
+    case Tag_Lam:
+      deepwalk(node->s0, callback, stack);
+      break;
+    case Tag_Null:
+    case Tag_Var: break;
+  }
+
+  callback(node);
+
+
+}
 
 
 
+void erase(Node* node);
+
+int erase_dup_label = 0;
+int erase_dup_is_dup2 = 0;
+
+void do_erase_dup(Node* node){
+  if (node->tag == Tag_Sup && node->label == erase_dup_label){
+    erase(erase_dup_is_dup2 ? node->s1 : node->s0);
+    move(erase_dup_is_dup2 ? node->s0 : node->s1, node);
+  }
+}
+
+void send_erase_dup(Node* node){
+
+  int prev_label = erase_dup_label;
+  int prev_is_dup2 = erase_dup_is_dup2;
+  erase_dup_label = node->label;
+  erase_dup_is_dup2 = node->tag == Tag_Dup2;
+
+  deepwalk(node->s0, erase_dup, NULL);
+
+  erase_dup_label = prev_label;
+  erase_dup_is_dup2 = prev_is_dup2;
+}
 
 void erase(Node* node){
   printf("Erasing node %s %d\n", tag_name(node->tag), node->label);
@@ -233,9 +340,16 @@ void erase(Node* node){
       node->s0->s1 = NULL;
       break;
     case Tag_Dup:
-    case Tag_Dup2: 
-      move(node->s0, node->s1);
+    case Tag_Dup2:{
+
+      // move(node->s0, node->s1);
+      DupStack* stack = malloc(sizeof(DupStack));
+      stack->label = node->label;
+      stack->is_dup2 = node->tag == Tag_Dup2;
+      deepwalk(node->s0, erase, stack);
+      printf("Erased dup %d\n", node->label);
       break;
+    }
     case Tag_Null: break;
   };
   free_node(node);
@@ -400,6 +514,28 @@ Node* deserialize(int* data) {
   return root;
 }
 
+
+
+void print_tag(Node* node){
+
+  printf(" <> %s %d\n", tag_name(node->tag), node->label);
+}
+
+void print_term(Node* node){
+  printf("Printing term %s\n", tag_name(node->tag));
+  deepwalk(node, print_tag, NULL);
+}
+
+
+void print_term_c(int* graph_data){
+  Node* node = deserialize(graph_data);
+  print_term(node);
+
+  printf("Erasing term\n");
+  erase(node);
+}
+
+
 int* work(int* graph_data, int steps){
   // Install segfault handler
   struct sigaction sa;
@@ -416,7 +552,7 @@ int* work(int* graph_data, int steps){
     // Segfault occurred - restore old handler and return error
     sigaction(SIGSEGV, &old_sa, NULL);
     fprintf(stderr, "SEGFAULT caught in C code\n");
-    // Return a special error value: [-1] indicates error
+    // Return a special error value: [-1] indicates errorx§
     int* error_result = malloc(sizeof(int));
     error_result[0] = -1;
     return error_result;
@@ -425,10 +561,12 @@ int* work(int* graph_data, int steps){
   // Normal execution
   Node* node = deserialize(graph_data);
 
-  run(node, steps);
+  // run(node, steps);
   int* fmt = serialize(node);
-  erase(node);
 
+  print_term(node);
+
+  erase(node);
 
   sigaction(SIGSEGV, &old_sa, NULL);
 
