@@ -5,7 +5,7 @@ from example import circular, cnat
 # from functions import scott
 import scott  
 from main import run_term_c
-from node import Node, hide_dups, lam, null, print_tree, reset_labels, x
+from node import DEBUG, Node, hide_dups, lam, null, print_tree, reset_labels, x
 
 
 def assert_fmt(term:Node, expected:str):
@@ -32,7 +32,7 @@ class TestFormat(unittest.TestCase):
 
     with hide_dups.context(False):
       assert_fmt(cnat(1), "λa λb ( a b)")
-      assert_fmt(cnat(2), "λa λb ( &74{c, d} = a in c ( d b))")
+      assert_fmt(cnat(2), "λa λb ( &71{c, d} = a in c ( d b))")
   
   def test_fmt_snat(self):
     assert_fmt(scott.nat(0), "λ λa a")

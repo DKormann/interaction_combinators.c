@@ -1,5 +1,5 @@
 import subprocess, ctypes, tempfile, os
-from node import Node, lam, print_tree, x, app, sup, dup, var, null, Tag, hide_dups, tree
+from node import DEBUG, Node, lam, print_tree, x, app, sup, dup, var, null, Tag, hide_dups, tree
 from run import step, move
 from typing import Callable
 
@@ -43,6 +43,8 @@ def to_c_data(node: Node) -> list[int]:
 
 
 def from_c_data(res:ctypes.POINTER(ctypes.c_int))->Node:
+
+
   l = res[0]
   
   if l == -1:
@@ -51,7 +53,9 @@ def from_c_data(res:ctypes.POINTER(ctypes.c_int))->Node:
   nodes = [None] + [Node(None) for _ in range(l)]
   for i in range(l):
 
+
     tag = [Tag.App, Tag.Lam, Tag.Sup, Tag.Dup, Tag.Dup2, Tag.Null, Tag.Var][res[i * 4 + 1]]
+    # print(i + 1, tag, res[i * 4 + 2], res[i * 4 + 3], res[i * 4 + 4])
     nodes[i + 1].tag = tag
     nodes[i + 1].label = res[i * 4 + 2]
     nodes[i + 1].s0 = nodes[res[i * 4 + 3]]
@@ -74,32 +78,31 @@ lib = ctypes.CDLL(so_path)
 lib.work.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
 lib.work.restype = ctypes.POINTER(ctypes.c_int)
 
-lib.print_term_c.argtypes = [ctypes.POINTER(ctypes.c_int)]
-lib.print_term_c.restype = None
+lib.set_debug.argtypes = [ctypes.c_int]
 
 
-def print_term_c(term: Node):
-  graph_data = to_c_data(term)
-  lib.print_term_c((ctypes.c_int * len(graph_data))(*graph_data))
 
 def run_term_c(term: Node, steps: int = 100) -> Node:
 
+  lib.set_debug(DEBUG.get())
   graph_data = to_c_data(term)
   res = lib.work((ctypes.c_int * len(graph_data))(*graph_data), steps)
   return from_c_data(res)
 
 
 if __name__ == "__main__":
-  # term = Node(lambda x, y: y)
-  # print(term)
-  # print_term_c(term)
+
   term = dup(sup(null(), null(), 0), 1)
   term = sup(term[0], term[1], 0)
-  # term = dup(sup(sup(null(), null(), 0), null(), 0), 0) [0]
-
-
-  # print_term_c(ds[0])
 
   print(term)
 
-  run_term_c(term)
+  res = run_term_c(term, 100)
+
+  print(res)
+
+
+
+
+
+

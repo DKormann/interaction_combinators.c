@@ -74,19 +74,19 @@ def copyn()->Node:
 
 
 
+if __name__ == "__main__":
+
+  c = Y_comb()(copyn())(nat(2))
 
 
-c = Y_comb()(copyn())(nat(2))
 
-
-
-print(c)
-
-for i in range(4):
-  c = run_term_c(c,1)
-  hide_dups.set(False)
   print(c)
-  if not linear_check(c): break
-  print('-'*10, 'linear check passed')
+
+  for i in range(4):
+    c = run_term_c(c,1)
+    hide_dups.set(False)
+    print(c)
+    if not linear_check(c): break
+    print('-'*10, 'linear check passed')
 
 

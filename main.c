@@ -150,6 +150,11 @@ int tag_counters[7];
 
 int DEBUG = 1;
 
+
+void set_debug(int debug){
+  DEBUG = debug;
+}
+
 void debug(char* content){
   if (DEBUG){
 
@@ -189,9 +194,6 @@ void new_runtime(){
   runtime = malloc(sizeof(Runtime));
   runtime->empty_index = 0;
 }
-
-
-
 
 
 
@@ -380,6 +382,16 @@ Node* app(Node* f, Node* x){
   res->s1 = x;
   return res;
 }
+
+
+void print_tag(Node* node){
+  printf(" <> %s %d\n", tag_name(node->tag), node->label);
+}
+
+void print_term(Node* node){
+  walk_term(node, print_tag);
+}
+
 
 
 
@@ -574,8 +586,9 @@ int step(Node* term){
           return DUP_SUP(da, db, other);
         }
         case Tag_Null:{
+          debug("DUP_NULL\n");
           just_move(other, da);
-          move(other, da);          
+          move(other, db);          
           return 1;
         }
         case Tag_App:{
@@ -627,15 +640,6 @@ Node* deserialize(int* data) {
 }
 
 
-void print_tag(Node* node){
-  printf(" <> %s %d\n", tag_name(node->tag), node->label);
-}
-
-void print_term(Node* node){
-  printf("Printing term %s\n", tag_name(node->tag));
-  walk_term(node, print_tag);
-}
-
 
 void print_term_c(int* graph_data){
   Node* node = deserialize(graph_data);
@@ -672,12 +676,15 @@ int* work(int* graph_data, int steps){
 
   Node* node = deserialize(graph_data);
 
-  // run(node, steps);
+  // print_term(node);
+
+  run(node, steps);
+
   int* fmt = serialize(node);
 
-  print_term(node);
-
-  erase(node);
+  free(runtime);
+  
+  
 
   sigaction(SIGSEGV, &old_sa, NULL);
 
@@ -690,7 +697,7 @@ int* work(int* graph_data, int steps){
         printf("%s : %d\n", tag_name(i), tag_counters[i]);
       }
     }
-    // exit(1);
+    // exit(1);p
   }
   return fmt;
 }
