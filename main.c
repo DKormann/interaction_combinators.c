@@ -7,6 +7,7 @@
 
 
 
+
 typedef struct BST{
   int is_leaf;
   unsigned long value;
@@ -22,7 +23,7 @@ typedef struct BSTLeaf{
 
 
 unsigned long hash_ptr(void* ptr){
-  return ((unsigned long)ptr) * 83794261827;
+  return ((unsigned long)ptr) * 83794261827 + 3489;
 }
 
 
@@ -34,7 +35,6 @@ void _insert_bst(BST* tree, unsigned long value){
   int tree_bigger = tree->value > value;
   BST* next = tree_bigger ? tree->left : tree->right;
   if (next->is_leaf){
-    printf("insert_bst: next is leaf %lu\n", next->value);
     BST* node = malloc(sizeof(BST));
     BST* leaf = malloc(sizeof(BSTLeaf));
     leaf->is_leaf = 1;
@@ -64,7 +64,6 @@ void _remove_bst(BST** tree, unsigned long value){
     exit(1);
   }
   int tree_be = (*tree)->value >=  value;
-  // printf("remove_bst: tree value %lu value %lu tree_bigger %d\n", (*tree)->value, value, tree_bigger);
   BST* next = tree_be? (*tree)->left : (*tree)->right;
   if (next->is_leaf){
     if (next->value == value){
@@ -72,7 +71,6 @@ void _remove_bst(BST** tree, unsigned long value){
       BST* other = tree_be ? (*tree)->right : (*tree)->left;
       BST*old = *tree;
       (*tree) = other;
-      old->value = 77;
       free(old);
       return;
     }
@@ -100,16 +98,29 @@ int has_bst(BST* tree, void* value){
   return _has_bst(tree, hash_ptr(value));
 }
 
-void print_bst(BST* tree, int indent){
-  for (int i = 0; i < indent; i++){
-    printf(" ");
-  }
+void _print_bst(BST* tree, int indent){
+
   if (tree->is_leaf){
     printf("%lu\n", tree->value);
   }else{
-    printf("node %lu \n", tree->value);
-    print_bst(tree->left, indent + 1);
-    print_bst(tree->right, indent + 1);
+    _print_bst(tree->left, indent + 1);
+    _print_bst(tree->right, indent + 1);
+  }
+}
+
+void print_bst(BST* tree){
+  printf("BST: ");
+  _print_bst(tree->right->right, 0);
+  printf("\n");
+}
+
+void free_bst(BST* tree){
+  if (tree->is_leaf){
+    free(tree);
+  }else{
+    free_bst(tree->left);
+    free_bst(tree->right);
+    free(tree);
   }
 }
 
@@ -125,6 +136,12 @@ BST* new_bst(){
   tree->right->value = 0;
   return tree;
 };
+
+
+
+
+
+
 
 
 
@@ -157,7 +174,48 @@ typedef struct Node{
   struct Node* s1;
 }Node;
 
+#define MAX_NODES 1000000
 
+typedef struct Runtime{
+  Node nodes[MAX_NODES];
+  int empty_index;
+  int node_ctr;
+  Node* free_list;
+} Runtime;
+
+Runtime* runtime;
+
+void new_runtime(){
+  runtime = malloc(sizeof(Runtime));
+  runtime->empty_index = 0;
+}
+
+
+
+
+
+
+Node* new_node(Tag tag, int label){
+  Node* node;
+  if (runtime->free_list != NULL){
+    node = runtime->free_list;
+    runtime->free_list = node->s0;
+  }else{
+    node = &runtime->nodes[runtime-> empty_index ++ ];
+  }
+  runtime->node_ctr ++;
+  node->tag = tag;
+  node->label = label;
+  node->s0 = NULL;
+  node->s1 = NULL;
+  return node;
+}
+
+void free_node(Node* node){
+  runtime->node_ctr --;
+  node->s0 = runtime->free_list;
+  runtime->free_list = node;
+}
 
 typedef struct Queue{
   Node* node;
@@ -173,6 +231,44 @@ void segfault_handler(int sig) {
   segfault_occurred = 1;
   longjmp(segfault_jmp, 1);
 }
+
+
+void walk_cached(Node* node, void callback(Node*), BST* visited){
+  if (node == NULL){
+    return;
+  }
+  
+  callback(node);
+  switch (node->tag){
+    case Tag_App:
+    case Tag_Sup:
+      walk_cached(node->s0, callback, visited);
+      walk_cached(node->s1, callback, visited);
+      break;
+    case Tag_Lam:
+      walk_cached(node->s0, callback, visited);
+      break;
+    case Tag_Dup:
+    case Tag_Dup2:
+      if (node->s0 != NULL){
+        if (!has_bst(visited, node->s0)){
+          insert_bst(visited, node->s0);
+          walk_cached(node->s0, callback, visited);
+        }else{
+          remove_bst(&visited, node->s0);
+        }
+      }
+    default: break;
+  }
+}
+
+void walk_term(Node* node, void callback(Node*)){
+  BST* visited = new_bst();
+  walk_cached(node, callback, visited);
+  free_bst(visited);
+}
+
+/* SERIALIZATION */
 
 
 char* tag_name(int tag){
@@ -258,25 +354,6 @@ int* serialize(Node* node){
 
 
 
-Node* new_node(Tag tag, int label){
-  node_counter++;
-
-  tag_counters[tag] ++ ;
-
-  Node* node = malloc(sizeof(Node));
-  node->tag = tag;
-  node->label = label;
-  node->s0 = NULL;
-  node->s1 = NULL;
-  return node;
-}
-
-void free_node(Node* node){
-  node_counter--;
-  tag_counters[node->tag] --;
-  free(node);
-}
-
 Node** dup(Node* target, int label){
   Node* dup1 = new_node(Tag_Dup, label);
   Node* dup2 = new_node(Tag_Dup2, label);
@@ -306,9 +383,14 @@ Node* app(Node* f, Node* x){
 
 
 
-
+void erase(Node* node);
 
 void just_move(Node* src, Node* dst){
+
+  if (dst == NULL){
+    erase(src);
+    return;
+  }
 
   tag_counters[src->tag] ++;
   tag_counters[dst->tag] --;
@@ -331,9 +413,14 @@ void just_move(Node* src, Node* dst){
   if (src->tag == Tag_Dup || src->tag == Tag_Dup2){
     dst->s1->s1 = dst;
   }
+
 }
 
 void move(Node* src, Node* dst){
+  if (dst == NULL){
+    erase(src);
+    return;
+  }
   just_move(src,dst);
   free_node(src);
 }
@@ -355,70 +442,7 @@ void print_stack(DupStack* stack){
   printf("]\n");
 }
 
-
-void deepwalk(Node* node, void callback (Node*), DupStack* stack){
-  switch (node->tag){
-    case Tag_App:
-      deepwalk(node->s0, callback, stack);
-      deepwalk(node->s1, callback, stack);
-      break;
-    case Tag_Sup:{
-      DupStack* head = malloc(sizeof(DupStack));
-      DupStack* current = head;
-      current->next = stack;
-      while (current->next != NULL){
-
-        if (current->next->label == node->label){
-          DupStack* matched = current->next;
-          current->next = current->next->next;
-          deepwalk(matched->is_dup2 ? node->s1 : node->s0, callback, head->next);
-          current->next = matched;
-          free(head);
-          callback(node);
-          return;
-        }
-        current = current->next;
-      }
-      deepwalk(node->s0, callback, stack);
-      deepwalk(node->s1, callback, stack);
-      free(head);
-      break;
-    }
-    case Tag_Dup:
-    case Tag_Dup2:{
-      DupStack newstack = {node->label, node->tag == Tag_Dup2, stack};
-      deepwalk(node->s0, callback, &newstack);
-      break;
-    }
-    case Tag_Lam:
-      deepwalk(node->s0, callback, stack);
-      break;
-    case Tag_Null:
-    case Tag_Var: break;
-  }
-
-  callback(node);
-
-
-}
-
-
-
-void erase(Node* node);
-
-int erase_dup_label = 0;
-int erase_dup_is_dup2 = 0;
-
-void do_erase_dup(Node* node){
-  if (node->tag == Tag_Sup && node->label == erase_dup_label){
-    erase(erase_dup_is_dup2 ? node->s1 : node->s0);
-    move(erase_dup_is_dup2 ? node->s0 : node->s1, node);
-  }
-}
-
-
 void erase(Node* node){
-  printf("Erasing node %s %d\n", tag_name(node->tag), node->label);
   switch (node->tag){
     case Tag_App:
     case Tag_Sup: erase(node->s1);
@@ -430,13 +454,12 @@ void erase(Node* node){
       break;
     case Tag_Dup:
     case Tag_Dup2:{
-
-      // move(node->s0, node->s1);
-      DupStack* stack = malloc(sizeof(DupStack));
-      stack->label = node->label;
-      stack->is_dup2 = node->tag == Tag_Dup2;
-      deepwalk(node->s0, erase, stack);
-      printf("Erased dup %d\n", node->label);
+      if (node->s1 == NULL){
+        erase(node->s0);
+      }else{
+        node->s1->s1 = NULL;
+      }
+      
       break;
     }
     case Tag_Null: break;
@@ -542,7 +565,7 @@ int step(Node* term){
 
     case Tag_Dup: case Tag_Dup2:{
       Node* da = term->tag == Tag_Dup ? term : term->s1;
-      Node* db = da->s1;
+      Node* db = term->tag == Tag_Dup2 ? term : term->s1;
       switch (other->tag){
         case Tag_Lam:{
           return DUP_LAM(da, db, other);
@@ -604,15 +627,13 @@ Node* deserialize(int* data) {
 }
 
 
-
 void print_tag(Node* node){
-
   printf(" <> %s %d\n", tag_name(node->tag), node->label);
 }
 
 void print_term(Node* node){
   printf("Printing term %s\n", tag_name(node->tag));
-  deepwalk(node, print_tag, NULL);
+  walk_term(node, print_tag);
 }
 
 
@@ -626,6 +647,7 @@ void print_term_c(int* graph_data){
 
 
 int* work(int* graph_data, int steps){
+  new_runtime();
   // Install segfault handler
   struct sigaction sa;
   struct sigaction old_sa;
@@ -647,7 +669,7 @@ int* work(int* graph_data, int steps){
     return error_result;
   }
   
-  // Normal execution
+
   Node* node = deserialize(graph_data);
 
   // run(node, steps);
@@ -661,7 +683,6 @@ int* work(int* graph_data, int steps){
 
 
   if (node_counter != 0){
-    // printf("workd done. nodes left %d\n", node_counter);
     fprintf(stderr, "workd done. nodes left %d\n", node_counter);
 
     for (int i =0; i<7; i++){

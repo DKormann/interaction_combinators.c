@@ -45,7 +45,6 @@ def to_c_data(node: Node) -> list[int]:
 def from_c_data(res:ctypes.POINTER(ctypes.c_int))->Node:
   l = res[0]
   
-  # Check for error condition (segfault in C code)
   if l == -1:
     raise RuntimeError("Segmentation fault occurred in C code")
   
@@ -94,8 +93,9 @@ if __name__ == "__main__":
   # term = Node(lambda x, y: y)
   # print(term)
   # print_term_c(term)
-  term = dup(sup(null(), null(), 0), 0)[0]
-  term = dup(sup(sup(null(), null(), 0), null(), 0), 0) [0]
+  term = dup(sup(null(), null(), 0), 1)
+  term = sup(term[0], term[1], 0)
+  # term = dup(sup(sup(null(), null(), 0), null(), 0), 0) [0]
 
 
   # print_term_c(ds[0])
