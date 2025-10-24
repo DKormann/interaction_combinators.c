@@ -17,52 +17,13 @@ def Y_comb()->Node:
   return Node(lambda f: Node(lambda x: f(x(x))) (Node(lambda x: f(x(x)))))
 
 
-
-
-def linear_check(term:Node):
-  c = {}
-
-
-  def toggle(term:Node):
-    if term is None: return
-
-    if term in c: del c[term]
-    else: c[term] = True
-  
-  def go(term:Node):
-    match term.tag:
-      case Tag.Dup: toggle(term)
-      case Tag.Dup2:
-        toggle(term.s1)
-        return
-      case Tag.Lam: toggle(term.s1)
-      case Tag.Var: toggle(term)
-    
-    for src in term.srcs(): go(src)
-  
-  go(term)
-
-  if len(c) == 0: return True
-  for v in c:
-    print('-'*10, 'linear check FAIL')
-    print(v)
-    print(v.s0)
-  print(c)
-  
-
-
-
 def is_z()->Node:
   return Node(lambda n: n(
     lambda s: F(),
     T()
   ))
 
-# print(is_z())
-
-
-
-def copyn()->Node:
+def rec0()->Node:
   return Node(
     lambda self, n: n(
       lambda s: self(s),
@@ -71,22 +32,39 @@ def copyn()->Node:
   )
 
 
+def suc(x:Node)->Node:
+  return Node( lambda s,z: s(x))
 
+def rec_copy()->Node:
+  return Node(
+    lambda self, x: x(
+      lambda s: suc(self(s)),
+      nat(0)
+    )
+  )
 
 
 if __name__ == "__main__":
 
-  c = Y_comb()(copyn())(nat(2))
+  # print(Node(suc))
+  # print(rec_copy())
 
+  # c = Y_comb()(rec0())(nat(2))
+
+  c = Y_comb()(rec_copy())(nat(2))
 
 
   print(c)
 
-  for i in range(4):
+  prev = str(c)
+  for i in range(100):
+    print('-'*10, 'step', i)
     c = run_term_c(c,1)
     hide_dups.set(False)
     print(c)
-    if not linear_check(c): break
-    print('-'*10, 'linear check passed')
+    s = str(c)
+    if s == prev: break
+    prev = s
+
 
 

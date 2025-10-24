@@ -54,6 +54,20 @@ class TestNormalization(unittest.TestCase):
   
 
 
+class TestScott(unittest.TestCase):
+  def test_rec_0(self):
+    Y = scott.Y_comb()
+    term = Y(scott.rec0())(scott.nat(2))
+    assert_normal_fmt(term, "λ λa a")
+  
+  def test_rec_copy(self):
+    term = scott.Y_comb()(scott.rec_copy())(scott.nat(2))
+
+    assert_normal_fmt(term, "λ λa a")
+  
+  # def test_rec_copy(self):
+
+
 
 
 

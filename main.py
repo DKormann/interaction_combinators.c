@@ -64,25 +64,30 @@ def from_c_data(res:ctypes.POINTER(ctypes.c_int))->Node:
   return nodes[1]
 
 
-
-os.makedirs("./.tmp", exist_ok=True)
+compiled = False
 
 c_path = os.path.join("./.tmp", "main.c")
 so_path = os.path.join("./.tmp", "main.so")
-
-with open("main.c") as src:
-  code_template = src.read()
-
-subprocess.check_call(["clang", "-shared", "-O2", "-fPIC", "main.c", "-o", so_path])
 lib = ctypes.CDLL(so_path)
-lib.work.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
-lib.work.restype = ctypes.POINTER(ctypes.c_int)
 
-lib.set_debug.argtypes = [ctypes.c_int]
+def compile():
+  global compiled
+  compiled = True
+  os.makedirs("./.tmp", exist_ok=True)
+
+
+  subprocess.check_call(["clang", "-shared", "-O2", "-fPIC", "main.c", "-o", so_path])
+  lib.work.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
+  lib.work.restype = ctypes.POINTER(ctypes.c_int)
+
+  lib.set_debug.argtypes = [ctypes.c_int]
+  lib.new_runtime.argtypes = []
 
 
 
 def run_term_c(term: Node, steps: int = 100) -> Node:
+
+  if not compiled: compile()
 
   lib.set_debug(DEBUG.get())
   graph_data = to_c_data(term)

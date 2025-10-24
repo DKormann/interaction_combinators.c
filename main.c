@@ -139,15 +139,6 @@ BST* new_bst(){
 
 
 
-
-
-
-
-
-
-int node_counter = 0;
-int tag_counters[7];
-
 int DEBUG = 1;
 
 
@@ -193,6 +184,8 @@ Runtime* runtime;
 void new_runtime(){
   runtime = malloc(sizeof(Runtime));
   runtime->empty_index = 0;
+  runtime->node_ctr = 0;
+  runtime->free_list = NULL;
 }
 
 
@@ -404,8 +397,6 @@ void just_move(Node* src, Node* dst){
     return;
   }
 
-  tag_counters[src->tag] ++;
-  tag_counters[dst->tag] --;
 
   dst->tag = src->tag;
   dst->s0 = src->s0;
@@ -501,12 +492,14 @@ int APP_SUP(Node* App, Node* Sup){
 
 
 int DUP_LAM(Node* da, Node* db, Node* Lam){
-  debug("DUPLAM\n");
-  Node** dbody = dup(Lam->s0, da->label);
+  debug("DUP->LAM\n");
+  int label = da == NULL ? db->label : da->label;
+  Node** dbody = dup(Lam->s0, label);
   Node* funa = new_node(Tag_Lam,0);
   Node* funb = new_node(Tag_Lam,0);
   funa->s0 = dbody[0];
   funb->s0 = dbody[1];
+
   
   free(dbody);
   if (Lam->s1 != NULL){
@@ -514,9 +507,7 @@ int DUP_LAM(Node* da, Node* db, Node* Lam){
     funa->s1->s0 = funa;
     funb->s1 = new_node(Tag_Var, 0);
     funb->s1->s0 = funb;
-    move(sup(funa->s1, funb->s1, da->label), Lam->s1);
-  }else{
-    printf("TODO: handle null var lam\n");
+    move(sup(funa->s1, funb->s1, label), Lam->s1);
 
   }
   free_node(Lam);
@@ -527,7 +518,8 @@ int DUP_LAM(Node* da, Node* db, Node* Lam){
 
 int DUP_SUP(Node* da, Node* db, Node* Sup){
   debug("DUP_SUP\n");
-  if (Sup->label == da->label){
+  int label = da == NULL ? db->label : da->label;
+  if (Sup->label == label){
 
     if (Sup->s0 == db || Sup->s1 == db){
       move(Sup->s1, db);
@@ -538,8 +530,8 @@ int DUP_SUP(Node* da, Node* db, Node* Sup){
 
     }
   } else {
-    Node** dup1 = dup(Sup->s0, da->label);
-    Node** dup2 = dup(Sup->s1, da->label);
+    Node** dup1 = dup(Sup->s0, label);
+    Node** dup2 = dup(Sup->s1, label);
     move(sup(dup1[0], dup2[0], Sup->label), da);
     move(sup(dup1[1], dup2[1], Sup->label), db);
     free(dup1);
@@ -597,7 +589,12 @@ int step(Node* term){
         case Tag_Var:{
           return 0;
         }
-        default: break;
+        case Tag_Dup:
+        case Tag_Dup2:{
+          debug("DUP->DUP\n");
+          return step(other);
+        }
+        // default: break;
       }
       break;
     }
@@ -650,6 +647,9 @@ void print_term_c(int* graph_data){
 }
 
 
+
+
+
 int* work(int* graph_data, int steps){
   new_runtime();
   // Install segfault handler
@@ -664,10 +664,8 @@ int* work(int* graph_data, int steps){
   
   // Set up recovery point
   if (setjmp(segfault_jmp) != 0) {
-    // Segfault occurred - restore old handler and return error
     sigaction(SIGSEGV, &old_sa, NULL);
     fprintf(stderr, "SEGFAULT caught in C code\n");
-    // Return a special error value: [-1] indicates errorx§
     int* error_result = malloc(sizeof(int));
     error_result[0] = -1;
     return error_result;
@@ -676,29 +674,26 @@ int* work(int* graph_data, int steps){
 
   Node* node = deserialize(graph_data);
 
-  // print_term(node);
 
   run(node, steps);
 
   int* fmt = serialize(node);
 
-  free(runtime);
-  
-  
+  if (DEBUG){
+    printf("Nodes used: %d\n", runtime->node_ctr);
+  }
+
+  erase(node);
 
   sigaction(SIGSEGV, &old_sa, NULL);
 
 
-  if (node_counter != 0){
-    fprintf(stderr, "workd done. nodes left %d\n", node_counter);
-
-    for (int i =0; i<7; i++){
-      if (tag_counters[i]){
-        printf("%s : %d\n", tag_name(i), tag_counters[i]);
-      }
-    }
-    // exit(1);p
+  if (runtime->node_ctr != 0){
+    fprintf(stderr, "workd done. nodes left %d\n", runtime->node_ctr);
   }
+
+  free(runtime);
+
   return fmt;
 }
 

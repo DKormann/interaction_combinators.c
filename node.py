@@ -26,11 +26,9 @@ import os
 class Env:
   def __init__(self, name:str, value:int):
     self.name = name
-
-    if name in os.environ:
-      self.value = int(os.environ[name])
-    else:
-      self.value = value
+    self.value = value
+    if name in os.environ: self.value = int(os.environ[name])
+    else: self.value = value
   
   def set(self, value:int): self.value = value
   def get(self)->int: return self.value
@@ -49,8 +47,8 @@ class Env:
 
 
 hide_dups = Env("hide_dups", False)
-print_tree = Env("print_tree", True)
-DEBUG = Env("DEBUG", False)
+print_tree = Env("tree", True)
+DEBUG = Env("DEBUG", 0)
 
 class Node:
   def __init__(self, tag: Tag | None | Callable | int = None, s0:"Node" = None, s1:"Node" = None, label:int = None):
@@ -216,9 +214,9 @@ def tree(term:Node, ctx:dict[Node, int])->str:
         if hide_dups: return _tree(term.s0, dstack + ([(term.label, term.tag == Tag.Dup2)]))
 
         d1 = term if (term.tag == Tag.Dup) else term.s1
+        d2 = term if (term.tag == Tag.Dup2) else term.s1
         if d1 in ctx: return [varname(term)]
-
-        return [f"&{term.label}{{{varname(d1)}, {varname(d1.s1)}}} ="] + idn(_tree(term.s0, dstack)) + idn([f"in {varname(term)}"])
+        return [f"&{term.label}{{{varname(d1)}, {varname(d2)}}} ="] + idn(_tree(term.s0, dstack)) + idn([f"in {varname(term)}"])
 
       case Tag.Prim: return [str(term.label)]
       case Tag.Null: return ["Nul"]
