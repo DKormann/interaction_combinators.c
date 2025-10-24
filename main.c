@@ -544,6 +544,8 @@ int DUP_SUP(Node* da, Node* db, Node* Sup){
 
 
 
+
+
 int step(Node* term){
   if (term == NULL || term->tag == Tag_Null || term->tag == Tag_Var){
     return 0;
@@ -559,7 +561,7 @@ int step(Node* term){
         case Tag_Dup:
         case Tag_Dup2: return step(other);
         case Tag_Sup: return APP_SUP(term, other);
-        case Tag_App: return step(other);
+        case Tag_App: return step(other) || step(term->s1);
         case Tag_Var: return 0;
         default: break;
       }
@@ -594,7 +596,6 @@ int step(Node* term){
           debug("DUP->DUP\n");
           return step(other);
         }
-        // default: break;
       }
       break;
     }
@@ -651,6 +652,9 @@ void print_term_c(int* graph_data){
 
 
 int* work(int* graph_data, int steps){
+
+
+  
   new_runtime();
   // Install segfault handler
   struct sigaction sa;

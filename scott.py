@@ -12,9 +12,16 @@ def nat(n:int)->Node:
   return Node(lambda s, z: s(nat(n-1)))
 
 
+def iden()->Node:
+  return Node(lambda x: x)
+
 
 def Y_comb()->Node:
   return Node(lambda f: Node(lambda x: f(x(x))) (Node(lambda x: f(x(x)))))
+
+
+# def Y()->Node:
+#   return Node(lambda f: (lambda x: f(x(x)))(lambda x: f(x(x))))
 
 
 def is_z()->Node:
@@ -53,6 +60,8 @@ if __name__ == "__main__":
 
   c = Y_comb()(rec_copy())(nat(2))
 
+  c = app(iden()(nat(2)), iden()(nat(3)))
+
 
   print(c)
 
@@ -65,6 +74,8 @@ if __name__ == "__main__":
     s = str(c)
     if s == prev: break
     prev = s
-
+  
+  hide_dups.set(True)
+  print(c)
 
 

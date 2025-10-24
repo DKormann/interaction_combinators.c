@@ -216,7 +216,8 @@ def tree(term:Node, ctx:dict[Node, int])->str:
         d1 = term if (term.tag == Tag.Dup) else term.s1
         d2 = term if (term.tag == Tag.Dup2) else term.s1
         if d1 in ctx: return [varname(term)]
-        return [f"&{term.label}{{{varname(d1)}, {varname(d2)}}} ="] + idn(_tree(term.s0, dstack)) + idn([f"in {varname(term)}"])
+        # return [f"&{term.label}{{{varname(d1)}, {varname(d2)}}} ="] + idn(_tree(term.s0, dstack)) + idn([f"in {varname(term)}"])
+        return [f"{varname(term)} where &{term.label}{{{varname(d1)}, {varname(d2)}}} ="] + idn(_tree(term.s0, dstack))
 
       case Tag.Prim: return [str(term.label)]
       case Tag.Null: return ["Nul"]

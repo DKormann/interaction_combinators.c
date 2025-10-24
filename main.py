@@ -1,4 +1,4 @@
-import subprocess, ctypes, tempfile, os
+import subprocess, ctypes, tempfile, os, hashlib
 from node import DEBUG, Node, lam, print_tree, x, app, sup, dup, var, null, Tag, hide_dups, tree
 from run import step, move
 from typing import Callable
@@ -64,30 +64,33 @@ def from_c_data(res:ctypes.POINTER(ctypes.c_int))->Node:
   return nodes[1]
 
 
-compiled = False
-
-c_path = os.path.join("./.tmp", "main.c")
 so_path = os.path.join("./.tmp", "main.so")
-lib = ctypes.CDLL(so_path)
+c_cache_path = os.path.join("./.tmp", "c_hash")
 
-def compile():
-  global compiled
-  compiled = True
+
+with open("main.c", "rb") as f: c_hash = hashlib.md5(f.read()).hexdigest()
+
+def compile_c():
+  with open(c_cache_path, "w") as f:
+    f.write(c_hash)
+  print("Compiling...")
   os.makedirs("./.tmp", exist_ok=True)
-
-
   subprocess.check_call(["clang", "-shared", "-O2", "-fPIC", "main.c", "-o", so_path])
-  lib.work.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
-  lib.work.restype = ctypes.POINTER(ctypes.c_int)
 
-  lib.set_debug.argtypes = [ctypes.c_int]
-  lib.new_runtime.argtypes = []
+if not os.path.exists(c_cache_path): compile_c()
+else:
+  with open(c_cache_path, "r") as f:
+    if  f.read().strip() != c_hash: compile_c()
 
+lib = ctypes.CDLL(so_path)
+lib.work.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
+lib.work.restype = ctypes.POINTER(ctypes.c_int)
+
+lib.set_debug.argtypes = [ctypes.c_int]
+lib.new_runtime.argtypes = []
 
 
 def run_term_c(term: Node, steps: int = 100) -> Node:
-
-  if not compiled: compile()
 
   lib.set_debug(DEBUG.get())
   graph_data = to_c_data(term)
