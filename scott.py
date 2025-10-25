@@ -51,12 +51,10 @@ from example import cnat
 if __name__ == "__main__":
 
 
-  c = cnat(3)(cnat(2))
-
-
+  c = cnat(2)(cnat(2))
 
   prev = str(c)
-  for i in range(100):
+  for i in range(1):
     print('-'*10, 'step', i)
     c = run_term_c(c, 30)
     hide_dups.set(False)
@@ -65,7 +63,5 @@ if __name__ == "__main__":
     if s == prev: break
     prev = s
   
-  hide_dups.set(True)
-  print(c)
-
-
+  with hide_dups.context(True):
+    print(c)

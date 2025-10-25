@@ -559,6 +559,7 @@ int step(Node* term){
   if (other == NULL){
     return 0;
   }
+  if (DEBUG){ printf("step %s -> %s\n", tag_name(term->tag), tag_name(other->tag));}
 
   switch (term->tag){
     case Tag_App:
@@ -566,7 +567,7 @@ int step(Node* term){
         case Tag_Lam: return APP_LAM(term, other);
         case Tag_Sup: return APP_SUP(term, other);
         case Tag_Dup:
-        case Tag_Dup2: return step(other);
+        case Tag_Dup2:
         case Tag_App:
           if (step(other)){
             return 1;
@@ -628,45 +629,22 @@ int step(Node* term){
 }
 
 void run(Node* node, int steps){
-  printf("running %d steps\n", steps);
-  // while (steps> 0){
 
-  //   full_redex_search = 0;
-  //   while (steps > 0 && step(node)){
-  //     steps--;
-  //   }
-    
-  //   full_redex_search = 1;
-  //   visited = new_bst();
-  //   while (steps > 0){
-  //     if (!step(node)){
-  //       steps = 0;
-  //       break;
-  //     }
-  //     steps--;
-  //   }
-  //   free_bst(visited);
-  // }
   while (steps > 0){
 
     full_redex_search = 0;
-    while ( step(node) && --steps > 0){
-
-    }
-
+    while ( step(node) && --steps > 0){}
     full_redex_search = 1;
-    visited = new_bst();
     while (steps > 0){
-      if (!step(node)){
-        free_bst(visited);
-        printf("NORMAL FORM\n");
+      visited = new_bst();
+      int succ = step(node);
+      free_bst(visited);
+      if (!succ){
         return;
       }else{
         steps -- ;
       }
-
     }
-    free_bst(visited);
   }
   printf("STEPS EXHAUSTED\n");
 }
@@ -753,7 +731,9 @@ int* work(int* graph_data, int steps){
 
 
   if (runtime->node_ctr != 0){
-    fprintf(stderr, "workd done. nodes left %d\n", runtime->node_ctr);
+    if (DEBUG){
+      fprintf(stderr, "workd done. nodes left %d\n", runtime->node_ctr);
+    }
   }
 
   free(runtime);
