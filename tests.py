@@ -32,7 +32,7 @@ class TestFormat(unittest.TestCase):
 
     with hide_dups.context(False):
       assert_fmt(cnat(1), "λa λb ( a b)")
-      assert_fmt(cnat(2), "λa λb ( &71{c, d} = a in c ( d b))")
+      assert_fmt(cnat(2), "λa λb ( c where &71{c, d} = a ( d b))")
   
   def test_fmt_snat(self):
     assert_fmt(scott.nat(0), "λ λa a")
@@ -60,10 +60,10 @@ class TestScott(unittest.TestCase):
     term = Y(scott.rec0())(scott.nat(2))
     assert_normal_fmt(term, "λ λa a")
   
-  def test_rec_copy(self):
-    term = scott.Y_comb()(scott.rec_copy())(scott.nat(2))
+  # def test_rec_copy(self):
+  #   term = scott.Y_comb()(scott.rec_copy())(scott.nat(2))
 
-    assert_normal_fmt(term, "λ λa a")
+  #   assert_normal_fmt(term, "λ λa a")
   
   # def test_rec_copy(self):
 

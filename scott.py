@@ -20,10 +20,6 @@ def Y_comb()->Node:
   return Node(lambda f: Node(lambda x: f(x(x))) (Node(lambda x: f(x(x)))))
 
 
-# def Y()->Node:
-#   return Node(lambda f: (lambda x: f(x(x)))(lambda x: f(x(x))))
-
-
 def is_z()->Node:
   return Node(lambda n: n(
     lambda s: F(),
@@ -50,25 +46,19 @@ def rec_copy()->Node:
     )
   )
 
+from example import cnat
 
 if __name__ == "__main__":
 
-  # print(Node(suc))
-  # print(rec_copy())
 
-  # c = Y_comb()(rec0())(nat(2))
-
-  c = Y_comb()(rec_copy())(nat(2))
-
-  c = app(iden()(nat(2)), iden()(nat(3)))
+  c = cnat(3)(cnat(2))
 
 
-  print(c)
 
   prev = str(c)
   for i in range(100):
     print('-'*10, 'step', i)
-    c = run_term_c(c,1)
+    c = run_term_c(c, 30)
     hide_dups.set(False)
     print(c)
     s = str(c)

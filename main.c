@@ -545,31 +545,52 @@ int DUP_SUP(Node* da, Node* db, Node* Sup){
 
 
 
+int full_redex_search = 1;
+BST* visited;
 
 int step(Node* term){
-  if (term == NULL || term->tag == Tag_Null || term->tag == Tag_Var){
+
+  if (term == NULL){
     return 0;
   }
+
+
   Node* other = term->s0;
   if (other == NULL){
     return 0;
   }
+
   switch (term->tag){
     case Tag_App:
       switch (other->tag){
         case Tag_Lam: return APP_LAM(term, other);
+        case Tag_Sup: return APP_SUP(term, other);
         case Tag_Dup:
         case Tag_Dup2: return step(other);
-        case Tag_Sup: return APP_SUP(term, other);
-        case Tag_App: return step(other) || step(term->s1);
-        case Tag_Var: return 0;
-        default: break;
+        case Tag_App:
+          if (step(other)){
+            return 1;
+          }
+          if (full_redex_search){
+            return step(term->s1);
+          }
+          return 0;
+        case Tag_Var: return step(term->s1);
+        case Tag_Null:
+          erase(term->s1);
+          move(other, term);
       }
       break;
     case Tag_Sup: return step(other) || step(term->s1);      
     case Tag_Lam: return step(other);
 
     case Tag_Dup: case Tag_Dup2:{
+      if (full_redex_search){
+        if (has_bst(visited, other)){
+          return 0;
+        }
+        insert_bst(visited, other);
+      }
       Node* da = term->tag == Tag_Dup ? term : term->s1;
       Node* db = term->tag == Tag_Dup2 ? term : term->s1;
       switch (other->tag){
@@ -593,22 +614,61 @@ int step(Node* term){
         }
         case Tag_Dup:
         case Tag_Dup2:{
-          debug("DUP->DUP\n");
           return step(other);
         }
       }
       break;
     }
-    default:break;
+    case Tag_Var:
+    case Tag_Null:
+      return 0;
   }
   printf("TODO: handle %s -> %s\n", tag_name(term->tag), tag_name(other->tag));
   return 0;
 }
 
 void run(Node* node, int steps){
-  while (steps > 0 && step(node)){
-    steps--;
+  printf("running %d steps\n", steps);
+  // while (steps> 0){
+
+  //   full_redex_search = 0;
+  //   while (steps > 0 && step(node)){
+  //     steps--;
+  //   }
+    
+  //   full_redex_search = 1;
+  //   visited = new_bst();
+  //   while (steps > 0){
+  //     if (!step(node)){
+  //       steps = 0;
+  //       break;
+  //     }
+  //     steps--;
+  //   }
+  //   free_bst(visited);
+  // }
+  while (steps > 0){
+
+    full_redex_search = 0;
+    while ( step(node) && --steps > 0){
+
+    }
+
+    full_redex_search = 1;
+    visited = new_bst();
+    while (steps > 0){
+      if (!step(node)){
+        free_bst(visited);
+        printf("NORMAL FORM\n");
+        return;
+      }else{
+        steps -- ;
+      }
+
+    }
+    free_bst(visited);
   }
+  printf("STEPS EXHAUSTED\n");
 }
 
 Node* deserialize(int* data) {
