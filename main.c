@@ -363,6 +363,14 @@ Node** dup(Node* target, int label){
 }
 
 Node* sup(Node* a, Node* b, int label){
+  if (a == NULL){
+    printf("sup a is NULL\n");
+    exit(1);
+  }
+  if (b == NULL){
+    printf("sup b is NULL\n");
+    exit(1);
+  }
   Node* res = new_node(Tag_Sup, label);
   res->s0 = a;
   res->s1 = b;
@@ -411,10 +419,16 @@ void just_move(Node* src, Node* dst){
     src->s0->s1 = dst;
   }
   if (src->tag == Tag_Lam && src->s1 != NULL){
+    if (src->s1->tag != Tag_Var){
+      printf("Error: Invalid tag for var in move\n");
+      exit(1);
+    }
     src->s1->s0 = dst;
   }
   if (src->tag == Tag_Dup || src->tag == Tag_Dup2){
-    dst->s1->s1 = dst;
+    if (dst->s1 != NULL){
+      dst->s1->s1 = dst;
+    }
   }
 
 }
@@ -425,7 +439,7 @@ void move(Node* src, Node* dst){
     return;
   }
   just_move(src,dst);
-  free_node(src);
+
 }
 
 
@@ -520,14 +534,24 @@ int DUP_SUP(Node* da, Node* db, Node* Sup){
   debug("DUP_SUP\n");
   int label = da == NULL ? db->label : da->label;
   if (Sup->label == label){
+    debug("DUP_SUP_SAME_LABEL\n");
 
     if (Sup->s0 == db || Sup->s1 == db){
+      debug("DUP_SUP_SAME_LABEL_SAME_DB\n");
       move(Sup->s1, db);
       move(Sup->s0, da);
     }else{
-      move(Sup->s0, da);
-      move(Sup->s1, db);
 
+      if (da != NULL){
+        move(Sup->s0, da);
+      }else{
+        erase(Sup->s0);
+      }
+      if (db != NULL){
+        move(Sup->s1, db);
+      }else{
+        erase(Sup->s1);
+      }
     }
   } else {
     Node** dup1 = dup(Sup->s0, label);
@@ -646,7 +670,7 @@ void run(Node* node, int steps){
       }
     }
   }
-  printf("STEPS EXHAUSTED\n");
+  debug("STEPS EXHAUSTED\n");
 }
 
 Node* deserialize(int* data) {

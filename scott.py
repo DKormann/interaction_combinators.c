@@ -46,22 +46,44 @@ def rec_copy()->Node:
     )
   )
 
+
+T : Node = Node(lambda t, f: t)
+F : Node = Node(lambda t, f: f)
+
+
+
+def eq()->Node:
+  return Y_comb()(
+    lambda self, x, y: x(
+      lambda px: y(
+        lambda py: self(px, py),
+        F
+      ),
+      y(
+        lambda _: F,
+        T
+      )
+    )
+  )
+
+
 from example import cnat
 
 if __name__ == "__main__":
 
 
-  c = cnat(2)(cnat(2))
+  c = eq()(nat(100), nat(100))
 
+  print(c)
   prev = str(c)
-  for i in range(1):
+  for i in range(100):
     print('-'*10, 'step', i)
-    c = run_term_c(c, 30)
+    c = run_term_c(c, 10000)
     hide_dups.set(False)
     print(c)
     s = str(c)
     if s == prev: break
     prev = s
   
-  with hide_dups.context(True):
+  with hide_dups(True), print_tree(False):
     print(c)

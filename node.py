@@ -39,7 +39,7 @@ class Env:
   def __eq__(self, other)->bool: return self.value == int(other)
 
   @contextmanager
-  def context(self, value: int):
+  def __call__(self, value: int):
     old_value = self.value
     self.value = value
     try: yield
