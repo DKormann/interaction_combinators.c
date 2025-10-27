@@ -16,7 +16,7 @@ print_tree.set(False)
 def assert_fmt(term:Node, expected:str|Node):
 
   if isinstance(expected, Node): expected = str(expected)
-  with print_tree.context(False):
+  with print_tree(False):
     assert str(term) == expected, f"Expected {expected}, got {str(term)}"
 
 def assert_normal_fmt(term:Node, expected:str | Node):
@@ -39,7 +39,7 @@ class TestFormat(unittest.TestCase):
   
   def test_fmt_cnat(self):
 
-    with hide_dups.context(False):
+    with hide_dups(False):
       reset_labels()
       assert_fmt(cnat(1), "λa λb ( a b)")
       assert_fmt(cnat(2), "λa λb ( c where &71{c, d} = a ( d b))")

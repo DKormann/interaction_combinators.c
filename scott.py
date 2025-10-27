@@ -14,10 +14,10 @@ def nat(n:int)->Node:
   lam0, x0 = lamvar()
   lam0.s0 = x0
 
-  p = lamvar(lam0)[0]
+  p = Node(Tag.Lam, lam0)
 
   for i in range(n):
-    lam0, x0 = lamvar()
+    lam0 = Node(Tag.Lam)
     lams, xs = lamvar(lam0)
     lam0.s0 = xs(p)
     p = lams
@@ -84,7 +84,9 @@ import time
 
 if __name__ == "__main__":
 
-  N = 300
+  hide_dups.set(True)
+  print_tree.set(False)
+  N = 100
   c = eq()(nat(N), nat(N-1))
   load_term_c(c)
 
@@ -100,7 +102,3 @@ if __name__ == "__main__":
       print(f"{t/1e9} seconds for {steps} steps, {steps/t*1e3:.3f} Mips")
       print(res)
       break
-
-
-
-

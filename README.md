@@ -28,6 +28,40 @@ var <-> lam connection:
 
 implementing python runtime is quite 
 
+## Thread Safety & Concurrent Testing
+
+The C runtime has been refactored to support concurrent testing via pytest-xdist and similar parallel test frameworks. Key changes:
+
+### C Code (`main.c`)
+- **Removed global `runtime` variable**: All functions now accept `Runtime* runtime` as a parameter
+- **New functions**:
+  - `Runtime* new_runtime()`: Creates a new isolated runtime instance
+  - `void free_runtime(Runtime* runtime)`: Cleans up a runtime instance
+- **Updated function signatures**: All functions that use runtime now take it as a parameter:
+  - `new_node(Runtime* runtime, Tag tag, int label)`
+  - `free_node(Runtime* runtime, Node* node)`
+  - `dup()`, `sup()`, `app()` - all take runtime parameter
+  - `erase()`, `move()`, `just_move()` - pass runtime through
+  - `step()`, `run()`, `load()`, `unload()` - accept runtime instance
+
+### Python Interface (`main.py`)
+- **Thread-local storage**: Uses `threading.local()` to store per-thread C library instances
+- **`get_lib()` function**: Returns thread-specific CDLL instance
+- **Updated C bindings**:
+  - `lib.new_runtime()`: Creates runtime instance
+  - `lib.free_runtime(runtime)`: Destroys runtime instance
+  - All C functions updated to accept runtime pointer parameter
+- **Thread-safe workflow**:
+  1. Each thread gets its own C library instance via `get_lib()`
+  2. Each test creates its own isolated runtime with `new_runtime()`
+  3. Tests can run concurrently without shared state conflicts
+
+### Usage
+Tests can now run in parallel without conflicts:
+```bash
+pytest tests.py -n auto  # Run with pytest-xdist
+```
+
 ## TODO:
 
  - [x] python runtime

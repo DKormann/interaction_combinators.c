@@ -6,6 +6,8 @@
 #include <setjmp.h>
 
 
+
+
 typedef struct BST{
   int is_leaf;
   unsigned long value;
@@ -178,10 +180,9 @@ typedef struct Runtime{
   int steps;
 } Runtime;
 
-Runtime* runtime;
 
 
-Node* new_node(Tag tag, int label){
+Node* new_node(Runtime* runtime, Tag tag, int label){
   Node* node;
   if (runtime->free_list != NULL){
     node = runtime->free_list;
@@ -197,7 +198,7 @@ Node* new_node(Tag tag, int label){
   return node;
 }
 
-void free_node(Node* node){
+void free_node(Runtime* runtime, Node* node){
   runtime->node_ctr --;
   node->s0 = runtime->free_list;
   runtime->free_list = node;
@@ -340,9 +341,9 @@ int* serialize(Node* node){
 
 
 
-Node** dup(Node* target, int label){
-  Node* dup1 = new_node(Tag_Dup, label);
-  Node* dup2 = new_node(Tag_Dup2, label);
+Node** dup(Node* target, int label, Runtime* runtime){
+  Node* dup1 = new_node(runtime, Tag_Dup, label);
+  Node* dup2 = new_node(runtime, Tag_Dup2, label);
   dup1->s1 = dup2;
   dup2->s1 = dup1;
   dup1->s0 = target;
@@ -353,7 +354,7 @@ Node** dup(Node* target, int label){
   return res;
 }
 
-Node* sup(Node* a, Node* b, int label){
+Node* sup(Node* a, Node* b, int label, Runtime* runtime){
   if (a == NULL){
     printf("sup a is NULL\n");
     exit(1);
@@ -362,14 +363,14 @@ Node* sup(Node* a, Node* b, int label){
     printf("sup b is NULL\n");
     exit(1);
   }
-  Node* res = new_node(Tag_Sup, label);
+  Node* res = new_node(runtime, Tag_Sup, label);
   res->s0 = a;
   res->s1 = b;
   return res;
 }
 
-Node* app(Node* f, Node* x){
-  Node* res = new_node(Tag_App, 0);
+Node* app(Node* f, Node* x, Runtime* runtime){
+  Node* res = new_node(runtime, Tag_App, 0);
   res->s0 = f;
   res->s1 = x;
   return res;
@@ -387,12 +388,12 @@ void print_term(Node* node){
 
 
 
-void erase(Node* node);
+void erase(Node* node, Runtime* runtime);
 
-void just_move(Node* src, Node* dst){
+void just_move(Node* src, Node* dst, Runtime* runtime){
 
   if (dst == NULL){
-    erase(src);
+    erase(src, runtime);
     return;
   }
 
@@ -424,12 +425,12 @@ void just_move(Node* src, Node* dst){
 
 }
 
-void move(Node* src, Node* dst){
+void move(Node* src, Node* dst, Runtime* runtime){
   if (dst == NULL){
-    erase(src);
+    erase(src, runtime);
     return;
   }
-  just_move(src,dst);
+  just_move(src,dst, runtime);
 
 }
 
@@ -450,12 +451,12 @@ void print_stack(DupStack* stack){
   printf("]\n");
 }
 
-void erase(Node* node){
+void erase(Node* node, Runtime* runtime){
   switch (node->tag){
     case Tag_App:
-    case Tag_Sup: erase(node->s1);
+    case Tag_Sup: erase(node->s1, runtime);
     case Tag_Lam:
-      erase(node->s0);
+      erase(node->s0, runtime);
       break;
     case Tag_Var:
       node->s0->s1 = NULL;
@@ -463,7 +464,7 @@ void erase(Node* node){
     case Tag_Dup:
     case Tag_Dup2:{
       if (node->s1 == NULL){
-        erase(node->s0);
+        erase(node->s0, runtime);
       }else{
         node->s1->s1 = NULL;
       }
@@ -472,56 +473,56 @@ void erase(Node* node){
     }
     case Tag_Null: break;
   };
-  free_node(node);
+  free_node(runtime, node);
 }
 
-int APP_LAM(Node* App, Node* Lam){
+int APP_LAM(Node* App, Node* Lam, Runtime* runtime){
   debug("APP_LAM\n");
   if (Lam->s1 != NULL){
-    move(App->s1, Lam->s1);
+    move(App->s1, Lam->s1, runtime);
   }else{
-    erase(App->s1);
+    erase(App->s1, runtime);
   }
-  move(Lam->s0, App);
-  free_node(Lam);
+  move(Lam->s0, App, runtime);
+  free_node(runtime, Lam);
   return 1;
 }
 
-int APP_SUP(Node* App, Node* Sup){
+int APP_SUP(Node* App, Node* Sup, Runtime* runtime){
   debug("APP_SUP\n");
-  Node** dups = dup(App->s1, Sup->label);
-  move(sup(app(Sup->s0, dups[0]), app(Sup->s1, dups[1]), Sup->label), App);
+  Node** dups = dup(App->s1, Sup->label, runtime);
+  move(sup(app(Sup->s0, dups[0], runtime), app(Sup->s1, dups[1], runtime), Sup->label, runtime), App, runtime);
   return 1;
 }
 
 
 
-int DUP_LAM(Node* da, Node* db, Node* Lam){
+int DUP_LAM(Node* da, Node* db, Node* Lam, Runtime* runtime){
   debug("DUP->LAM\n");
   int label = da == NULL ? db->label : da->label;
-  Node** dbody = dup(Lam->s0, label);
-  Node* funa = new_node(Tag_Lam,0);
-  Node* funb = new_node(Tag_Lam,0);
+  Node** dbody = dup(Lam->s0, label, runtime);
+  Node* funa = new_node(runtime, Tag_Lam,0);
+  Node* funb = new_node(runtime, Tag_Lam,0);
   funa->s0 = dbody[0];
   funb->s0 = dbody[1];
 
   
   free(dbody);
   if (Lam->s1 != NULL){
-    funa->s1 = new_node(Tag_Var, 0);
+    funa->s1 = new_node(runtime, Tag_Var, 0);
     funa->s1->s0 = funa;
-    funb->s1 = new_node(Tag_Var, 0);
+    funb->s1 = new_node(runtime, Tag_Var, 0);
     funb->s1->s0 = funb;
-    move(sup(funa->s1, funb->s1, label), Lam->s1);
+    move(sup(funa->s1, funb->s1, label, runtime), Lam->s1, runtime);
 
   }
-  free_node(Lam);
-  move(funa, da);
-  move(funb, db);
+  free_node(runtime, Lam);
+  move(funa, da, runtime);
+  move(funb, db, runtime);
   return 1;
 }
 
-int DUP_SUP(Node* da, Node* db, Node* Sup){
+int DUP_SUP(Node* da, Node* db, Node* Sup, Runtime* runtime){
   debug("DUP_SUP\n");
   int label = da == NULL ? db->label : da->label;
   if (Sup->label == label){
@@ -529,30 +530,30 @@ int DUP_SUP(Node* da, Node* db, Node* Sup){
 
     if (Sup->s0 == db || Sup->s1 == db){
       debug("DUP_SUP_SAME_LABEL_SAME_DB\n");
-      move(Sup->s1, db);
-      move(Sup->s0, da);
+      move(Sup->s1, db, runtime);
+      move(Sup->s0, da, runtime);
     }else{
 
       if (da != NULL){
-        move(Sup->s0, da);
+        move(Sup->s0, da, runtime);
       }else{
-        erase(Sup->s0);
+        erase(Sup->s0, runtime);
       }
       if (db != NULL){
-        move(Sup->s1, db);
+        move(Sup->s1, db, runtime);
       }else{
-        erase(Sup->s1);
+        erase(Sup->s1, runtime);
       }
     }
   } else {
-    Node** dup1 = dup(Sup->s0, label);
-    Node** dup2 = dup(Sup->s1, label);
-    move(sup(dup1[0], dup2[0], Sup->label), da);
-    move(sup(dup1[1], dup2[1], Sup->label), db);
+    Node** dup1 = dup(Sup->s0, label, runtime);
+    Node** dup2 = dup(Sup->s1, label, runtime);
+    move(sup(dup1[0], dup2[0], Sup->label, runtime), da, runtime);
+    move(sup(dup1[1], dup2[1], Sup->label, runtime), db, runtime);
     free(dup1);
     free(dup2);
   }
-  free_node(Sup);
+  free_node(runtime, Sup);
   return 1;
 }
 
@@ -563,7 +564,7 @@ int DUP_SUP(Node* da, Node* db, Node* Sup){
 int full_redex_search = 1;
 BST* visited;
 
-int step(Node* term){
+int step(Node* term, Runtime* runtime){
 
   if (term == NULL){
     return 0;
@@ -578,26 +579,26 @@ int step(Node* term){
   switch (term->tag){
     case Tag_App:
       switch (other->tag){
-        case Tag_Lam: return APP_LAM(term, other);
-        case Tag_Sup: return APP_SUP(term, other);
+        case Tag_Lam: return APP_LAM(term, other, runtime);
+        case Tag_Sup: return APP_SUP(term, other, runtime);
         case Tag_Dup:
         case Tag_Dup2:
         case Tag_App:
-          if (step(other)){
+          if (step(other, runtime)){
             return 1;
           }
           if (full_redex_search){
-            return step(term->s1);
+            return step(term->s1, runtime);
           }
           return 0;
-        case Tag_Var: return step(term->s1);
+        case Tag_Var: return step(term->s1, runtime);
         case Tag_Null:
-          erase(term->s1);
-          move(other, term);
+          erase(term->s1, runtime);
+          move(other, term, runtime);
       }
       break;
-    case Tag_Sup: return step(other) || step(term->s1);      
-    case Tag_Lam: return step(other);
+    case Tag_Sup: return step(other, runtime) || step(term->s1, runtime);      
+    case Tag_Lam: return step(other, runtime);
 
     case Tag_Dup: case Tag_Dup2:{
       if (full_redex_search){
@@ -610,26 +611,26 @@ int step(Node* term){
       Node* db = term->tag == Tag_Dup2 ? term : term->s1;
       switch (other->tag){
         case Tag_Lam:{
-          return DUP_LAM(da, db, other);
+          return DUP_LAM(da, db, other, runtime);
         }
         case Tag_Sup:{
-          return DUP_SUP(da, db, other);
+          return DUP_SUP(da, db, other, runtime);
         }
         case Tag_Null:{
           debug("DUP_NULL\n");
-          just_move(other, da);
-          move(other, db);          
+          just_move(other, da, runtime);
+          move(other, db, runtime);          
           return 1;
         }
         case Tag_App:{
-          return step(other);
+          return step(other, runtime);
         }
         case Tag_Var:{
           return 0;
         }
         case Tag_Dup:
         case Tag_Dup2:{
-          return step(other);
+          return step(other, runtime);
         }
       }
       break;
@@ -642,22 +643,23 @@ int step(Node* term){
   return 0;
 }
 
-int run(int Nsteps){
-
+int run(int Nsteps, Runtime* runtime){
   int steps = 0;
   Node* node = &(runtime->nodes[0]);
   while (steps < Nsteps){
+
     full_redex_search = 0;
     while (steps ++ < Nsteps){
-      if (!step(node)){
+      if (!step(node, runtime)){
+        printf("DONE\n");
         runtime->steps += steps;
-        break;
+        return runtime->steps;
       }
     }
     full_redex_search = 1;
     while (steps < Nsteps){
       visited = new_bst();
-      int succ = step(node);
+      int succ = step(node, runtime);
       free_bst(visited);
       if (!succ){
         runtime->steps += steps;
@@ -668,13 +670,26 @@ int run(int Nsteps){
     }
   }
   runtime->steps += steps;
+  debug("STEPS EXHAUSTED\n");
   return -1;
 }
 
 
 
+Runtime* new_runtime(){
+  Runtime* runtime = malloc(sizeof(Runtime));
+  runtime->empty_index = 0;
+  runtime->node_ctr = 0;
+  runtime->free_list = NULL;
+  runtime->steps = 0;
+  return runtime;
+}
 
-void load(int* data){
+void free_runtime(Runtime* runtime){
+  free(runtime);
+}
+
+int load(int* data, Runtime* runtime){
 
   struct sigaction sa;
   struct sigaction old_sa;
@@ -688,19 +703,13 @@ void load(int* data){
   if (setjmp(segfault_jmp) != 0) {
     sigaction(SIGSEGV, &old_sa, NULL);
     fprintf(stderr, "SEGFAULT caught in C code\n");
-    exit(1);
+    return 1;
   }
 
-  if (runtime != NULL){
-    printf("new_runtime: runtime already exists\n");
+  if (runtime == NULL){
+    printf("load: runtime is NULL\n");
     exit(1);
   }
-  runtime = malloc(sizeof(Runtime));
-  runtime->empty_index = 0;
-  runtime->node_ctr = 0;
-  runtime->free_list = NULL;
-  runtime->steps = 0;
-
 
   int count = data[0];
   if (count == 0) {
@@ -713,7 +722,7 @@ void load(int* data){
   
   for (int i = 0; i < count; i++) {
     int idx = i * 4 + 1;
-    Node* node = new_node(data[idx], data[idx + 1]);
+    Node* node = new_node(runtime, data[idx], data[idx + 1]);
     nodes[i + 1] = node;
   }
   
@@ -730,13 +739,12 @@ void load(int* data){
     printf("deserialize: root is not the first node\n");
   }
   free(nodes);
-
-
+  return 0;
 
 }
 
 
-int* unload(){
+int* unload(Runtime* runtime){
 
   if (runtime == NULL){
     printf("unload: runtime is NULL\n");
@@ -746,7 +754,5 @@ int* unload(){
   Node* node = &(runtime->nodes[0]);
 
   int* result = serialize(node);
-  free(runtime);
-  runtime = NULL;
   return result;
 }
