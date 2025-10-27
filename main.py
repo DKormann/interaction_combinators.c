@@ -1,8 +1,7 @@
-import subprocess, ctypes, tempfile, os, hashlib, threading
+import subprocess, ctypes, os, hashlib, threading
 from example import cnat
-from node import DEBUG, Node, lam, print_tree, x, app, sup, dup, var, null, Tag, hide_dups, tree
-from run import step, move
-from typing import Callable
+from node import DEBUG, Node, Tag, hide_dups
+
 
 
 def to_c_data(node: Node) -> list[int]:

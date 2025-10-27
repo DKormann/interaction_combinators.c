@@ -203,12 +203,17 @@ void free_node(Node* node){
   runtime->free_list = node;
 }
 
-typedef struct Queue{
+typedef struct SQueue{
   Node* node;
   int s0;
   int s1;
-  struct Queue* next;
-} Queue;
+  struct SQueue* next;
+} S_Queue;
+
+typedef struct SearchStack{
+  Node* node;
+  struct SearchStack* next;
+} SearchStack;
 
 static jmp_buf segfault_jmp;
 static volatile sig_atomic_t segfault_occurred = 0;
@@ -270,7 +275,7 @@ char* tag_name(int tag){
   return "UNK tag";
 }
 
-int _enqueue(Queue* queue, Node* node, int * ctr){
+int _enqueue(S_Queue* queue, Node* node, int * ctr){
   if (node == NULL){
     return 0;
   }
@@ -288,7 +293,7 @@ int _enqueue(Queue* queue, Node* node, int * ctr){
     queue = queue->next;
   }
   
-  Queue* new_node = malloc(sizeof(Queue));
+  S_Queue* new_node = malloc(sizeof(S_Queue));
   new_node->node = node;
   new_node->next = NULL;
   queue->next = new_node;
@@ -300,10 +305,10 @@ int _enqueue(Queue* queue, Node* node, int * ctr){
 
 int* serialize(Node* node){
 
-  Queue* queue = malloc(sizeof(Queue));
+  S_Queue* queue = malloc(sizeof(S_Queue));
   queue->node = node;
   queue->next = NULL;
-  Queue* current = queue;
+  S_Queue* current = queue;
   int ctr = 1;
 
   while (current != NULL){
@@ -327,7 +332,7 @@ int* serialize(Node* node){
     result[ctr + 2] = current->s0;
     result[ctr + 3] = current->s1;
     ctr += 4;
-    Queue* prev = current;
+    S_Queue* prev = current;
     current = current->next;
     if (current == NULL){
       break;
@@ -558,8 +563,6 @@ int DUP_SUP(Node* da, Node* db, Node* Sup){
 
 
 
-
-
 int full_redex_search = 1;
 BST* visited;
 
@@ -616,7 +619,6 @@ int step(Node* term){
           return DUP_SUP(da, db, other);
         }
         case Tag_Null:{
-          debug("DUP_NULL\n");
           just_move(other, da);
           move(other, db);          
           return 1;
@@ -642,34 +644,110 @@ int step(Node* term){
   return 0;
 }
 
+
+
+
+// void search_redex(SearchStack stack){
+
+//   switch (stack.node->tag){
+//     case Tag_Lam:
+//       stack = (SearchStack){stack.node->s0, stack.next};
+//       search_redex(stack);
+//       return;
+//     case Tag_Sup:
+//       stack = (SearchStack){stack.node->s0, stack.next};
+//       search_redex(stack);
+//       stack = (SearchStack){stack.node->s1, stack.next};
+//       search_redex(stack);
+//       return;
+//     default:{
+//       int succ = step(stack.node);
+//       if (!succ){
+//         return;
+//       }
+//       search_redex(stack);
+//     }
+//   }
+// }
+
+
+BST* searched_lams;
+
+void search_redex(Node* term){
+
+  switch (term->tag){
+    case Tag_Lam:
+      insert_bst(searched_lams, term);
+      search_redex(term->s0);
+      return;
+    case Tag_Sup:
+
+      search_redex(term->s0);
+      search_redex(term->s1);
+      return;
+    case Tag_App:
+      if (term->s0->tag == Tag_Var && has_bst(searched_lams, term->s0->s0))
+      {
+        return;
+      }
+    default:{
+
+      int succ = step(term);
+
+      if (!succ){
+        return;
+      }
+      runtime->steps ++;
+      search_redex(term);
+    }
+  }
+}
+
+
+
+
+
 int run(int Nsteps){
 
   int steps = 0;
   Node* node = &(runtime->nodes[0]);
   while (steps < Nsteps){
-    full_redex_search = 0;
-    while (steps ++ < Nsteps){
-      if (!step(node)){
-        runtime->steps += steps;
-        break;
-      }
-    }
+    // full_redex_search = 0;
+    // while (steps < Nsteps){
+    //   if (!step(node)){
+    //     break;
+    //     // return runtime->steps;
+    //   }
+    //   runtime->steps ++;
+    //   steps ++;
+    // }
     full_redex_search = 1;
     while (steps < Nsteps){
       visited = new_bst();
       int succ = step(node);
       free_bst(visited);
       if (!succ){
-        runtime->steps += steps;
         return runtime->steps;
       }else{
         steps ++ ;
+        runtime->steps ++;
       }
     }
   }
   runtime->steps += steps;
   return -1;
 }
+
+// int run(int Nsteps){
+//   int steps = 0;
+  
+//   Node* term = &(runtime->nodes[0]);
+//   full_redex_search = 0;
+//   searched_lams = new_bst();
+//   search_redex(term);
+//   free_bst(searched_lams);
+//   return runtime->steps;
+// }
 
 
 
@@ -730,11 +808,7 @@ void load(int* data){
     printf("deserialize: root is not the first node\n");
   }
   free(nodes);
-
-
-
 }
-
 
 int* unload(){
 

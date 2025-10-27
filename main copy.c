@@ -204,11 +204,11 @@ void free_node(Runtime* runtime, Node* node){
   runtime->free_list = node;
 }
 
-typedef struct Queue{
+typedef struct SQueue{
   Node* node;
   int s0;
   int s1;
-  struct Queue* next;
+  struct SQueue* next;
 } Queue;
 
 static jmp_buf segfault_jmp;

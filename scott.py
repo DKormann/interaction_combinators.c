@@ -82,11 +82,11 @@ def eq()->Node:
 from example import cnat
 import time
 
-if __name__ == "__main__":
+if __name__ == "__main__":  
 
   hide_dups.set(True)
   print_tree.set(False)
-  N = 100
+  N = 300
   c = eq()(nat(N), nat(N-1))
   load_term_c(c)
 
