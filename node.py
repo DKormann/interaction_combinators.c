@@ -175,6 +175,12 @@ def move(src:Node, dst:Node | None = None)->Node:
   return dst
 
 
+def lamvar(bod:Node|None = None)->tuple[Node, Node]:
+  x = Node(Tag.Var)
+  lam = Node(Tag.Lam, bod, x)
+  x.s0 = lam
+  return lam,x
+
 
 def parse_lam(lam:Node, current:Node, depth:int):
   print("parse_lam", current.tag)

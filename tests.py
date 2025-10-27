@@ -3,13 +3,9 @@ import unittest
 
 from example import circular, cnat
 
-# from functions import scott
 import scott  
 from main import run_term_c
 from node import DEBUG, Node, hide_dups, print_tree, reset_labels
-
-
-
 
 
 hide_dups.set(True)

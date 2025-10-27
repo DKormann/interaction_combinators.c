@@ -1,4 +1,5 @@
 import subprocess, ctypes, tempfile, os, hashlib
+from example import cnat
 from node import DEBUG, Node, lam, print_tree, x, app, sup, dup, var, null, Tag, hide_dups, tree
 from run import step, move
 from typing import Callable
@@ -82,32 +83,52 @@ else:
   with open(c_cache_path, "r") as f:
     if  f.read().strip() != c_hash: compile_c()
 
+
+
 lib = ctypes.CDLL(so_path)
-lib.work.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
-lib.work.restype = ctypes.POINTER(ctypes.c_int)
-
+lib.load.argtypes = [ctypes.POINTER(ctypes.c_int)]
+lib.load.restype = ctypes.c_int
+lib.unload.argtypes = []
+lib.unload.restype = ctypes.POINTER(ctypes.c_int)
 lib.set_debug.argtypes = [ctypes.c_int]
-lib.new_runtime.argtypes = []
 
+lib.run.argtypes = [ctypes.c_int]
+lib.run.restype = ctypes.c_int
 
-def run_term_c(term: Node, steps: int = 100) -> Node:
+lib.set_debug(DEBUG.get())
 
-  lib.set_debug(DEBUG.get())
-  graph_data = to_c_data(term)
-  res = lib.work((ctypes.c_int * len(graph_data))(*graph_data), steps)
-  return from_c_data(res)
+def load_term_c(term: Node) -> Node: return lib.load((ctypes.c_int * len(to_c_data(term)))(*to_c_data(term)))
+
+def unload_term_c() -> Node: return from_c_data(lib.unload())
+
+def run(steps:int): return lib.run(steps)
+
+def run_term_c(term:Node, steps: int = 1e6) -> Node:
+  print("running term")
+  load_term_c(term)
+  steps = run(steps)
+  res = unload_term_c()
+  print("ran term")
+  return res
+
 
 
 if __name__ == "__main__":
-
-  term = dup(sup(null(), null(), 0), 1)
-  term = sup(term[0], term[1], 0)
-
+  term = cnat(2)
   print(term)
-
-  res = run_term_c(term, 100)
-
+  load_term_c(term)
+  run(100)
+  res = unload_term_c()
   print(res)
+
+  term = cnat(2)
+  print(term)
+  load_term_c(term)
+  run(100)
+  res = unload_term_c()
+  print(res)
+
+  
 
 
 

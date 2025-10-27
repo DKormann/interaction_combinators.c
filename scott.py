@@ -3,13 +3,25 @@ Scott encoding for natural numbers and functions on them
 """
 
 from operator import truediv
+from typing_extensions import runtime
 from example import F, T
-from main import run_term_c
-from node import Node, Tag, app, hide_dups, lam, move, null, parse_lam, print_tree, sup, x, dup
+from main import load_term_c, run, run_term_c, unload_term_c
+from node import Node, Tag, app, hide_dups, lam, lamvar, move, null, parse_lam, print_tree, sup, x, dup
 
 def nat(n:int)->Node:
-  if n == 0: return Node(lambda s, z: z)
-  return Node(lambda s, z: s(nat(n-1)))
+
+
+  lam0, x0 = lamvar()
+  lam0.s0 = x0
+
+  p = lamvar(lam0)[0]
+
+  for i in range(n):
+    lam0, x0 = lamvar()
+    lams, xs = lamvar(lam0)
+    lam0.s0 = xs(p)
+    p = lams
+  return p
 
 
 def iden()->Node:
@@ -68,22 +80,27 @@ def eq()->Node:
 
 
 from example import cnat
+import time
 
 if __name__ == "__main__":
 
+  N = 300
+  c = eq()(nat(N), nat(N-1))
+  load_term_c(c)
 
-  c = eq()(nat(100), nat(100))
+  st = time.time_ns()
 
-  print(c)
-  prev = str(c)
+  B = 100000
   for i in range(100):
-    print('-'*10, 'step', i)
-    c = run_term_c(c, 10000)
-    hide_dups.set(False)
-    print(c)
-    s = str(c)
-    if s == prev: break
-    prev = s
-  
-  with hide_dups(True), print_tree(False):
-    print(c)
+    print(i)
+    steps = run(B)
+    if steps > -1:
+      res = unload_term_c()
+      t = time.time_ns() - st
+      print(f"{t/1e9} seconds for {steps} steps, {steps/t*1e3:.3f} Mips")
+      print(res)
+      break
+
+
+
+

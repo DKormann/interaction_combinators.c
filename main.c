@@ -177,16 +177,10 @@ typedef struct Runtime{
   int empty_index;
   int node_ctr;
   Node* free_list;
+  int steps;
 } Runtime;
 
 Runtime* runtime;
-
-void new_runtime(){
-  runtime = malloc(sizeof(Runtime));
-  runtime->empty_index = 0;
-  runtime->node_ctr = 0;
-  runtime->free_list = NULL;
-}
 
 
 
@@ -578,7 +572,6 @@ int step(Node* term){
     return 0;
   }
 
-
   Node* other = term->s0;
   if (other == NULL){
     return 0;
@@ -652,32 +645,74 @@ int step(Node* term){
   return 0;
 }
 
-void run(Node* node, int steps){
-
-  while (steps > 0){
+int run(int Nsteps){
+  int steps = 0;
+  Node* node = &(runtime->nodes[0]);
+  while (steps < Nsteps){
 
     full_redex_search = 0;
-    while ( step(node) && --steps > 0){}
+    while (steps ++ < Nsteps){
+      if (!step(node)){
+        printf("DONE\n");
+        runtime->steps += steps;
+        return runtime->steps;
+      }
+    }
     full_redex_search = 1;
-    while (steps > 0){
+    while (steps < Nsteps){
       visited = new_bst();
       int succ = step(node);
       free_bst(visited);
       if (!succ){
-        return;
+        runtime->steps += steps;
+        return runtime->steps;
       }else{
-        steps -- ;
+        steps ++ ;
       }
     }
   }
+  runtime->steps += steps;
   debug("STEPS EXHAUSTED\n");
+  return -1;
 }
 
-Node* deserialize(int* data) {
-  int count = data[0];
-  if (count == 0) return NULL;
+
+
+int load(int* data){
+
+  struct sigaction sa;
+  struct sigaction old_sa;
+  sa.sa_handler = segfault_handler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = 0;
+  sigaction(SIGSEGV, &sa, &old_sa);
   
-  Node** nodes = malloc(sizeof(Node*) * (count + 1));
+  segfault_occurred = 0;
+  
+  if (setjmp(segfault_jmp) != 0) {
+    sigaction(SIGSEGV, &old_sa, NULL);
+    fprintf(stderr, "SEGFAULT caught in C code\n");
+    return 1;
+  }
+
+  if (runtime != NULL){
+    printf("new_runtime: runtime already exists\n");
+    exit(1);
+  }
+  runtime = malloc(sizeof(Runtime));
+  runtime->empty_index = 0;
+  runtime->node_ctr = 0;
+  runtime->free_list = NULL;
+  runtime->steps = 0;
+
+
+  int count = data[0];
+  if (count == 0) {
+    printf("deserialize: count is 0\n");
+    exit(1);
+  }
+
+  Node** nodes = malloc(sizeof(void*) * (count + 1));
   nodes[0] = NULL;
   
   for (int i = 0; i < count; i++) {
@@ -695,73 +730,26 @@ Node* deserialize(int* data) {
   }
   
   Node* root = nodes[1];
+  if (root != &(runtime->nodes[0])){
+    printf("deserialize: root is not the first node\n");
+  }
   free(nodes);
-  return root;
+  return 0;
+
 }
 
 
+int* unload(){
 
-void print_term_c(int* graph_data){
-  Node* node = deserialize(graph_data);
-  print_term(node);
-
-  printf("Erasing term\n");
-  erase(node);
-}
-
-
-
-
-
-int* work(int* graph_data, int steps){
-
-
-  
-  new_runtime();
-  // Install segfault handler
-  struct sigaction sa;
-  struct sigaction old_sa;
-  sa.sa_handler = segfault_handler;
-  sigemptyset(&sa.sa_mask);
-  sa.sa_flags = 0;
-  sigaction(SIGSEGV, &sa, &old_sa);
-  
-  segfault_occurred = 0;
-  
-  // Set up recovery point
-  if (setjmp(segfault_jmp) != 0) {
-    sigaction(SIGSEGV, &old_sa, NULL);
-    fprintf(stderr, "SEGFAULT caught in C code\n");
-    int* error_result = malloc(sizeof(int));
-    error_result[0] = -1;
-    return error_result;
-  }
-  
-
-  Node* node = deserialize(graph_data);
-
-
-  run(node, steps);
-
-  int* fmt = serialize(node);
-
-  if (DEBUG){
-    printf("Nodes used: %d\n", runtime->node_ctr);
+  if (runtime == NULL){
+    printf("unload: runtime is NULL\n");
+    exit(1);
   }
 
-  erase(node);
+  Node* node = &(runtime->nodes[0]);
 
-  sigaction(SIGSEGV, &old_sa, NULL);
-
-
-  if (runtime->node_ctr != 0){
-    if (DEBUG){
-      fprintf(stderr, "workd done. nodes left %d\n", runtime->node_ctr);
-    }
-  }
-
+  int* result = serialize(node);
   free(runtime);
-
-  return fmt;
+  runtime = NULL;
+  return result;
 }
-
