@@ -85,20 +85,40 @@ import time
 if __name__ == "__main__":  
 
   hide_dups.set(True)
-  print_tree.set(False)
-  N = 300
+  # print_tree.set(False)
+
+  # c = cnat(2)(cnat(2))
+
+  # print(c)
+
+  # load_term_c(c)
+
+  # run(100000)
+
+  # res = unload_term_c()
+  # print(res)
+
+  
+  N = 3
   c = eq()(nat(N), nat(N-1))
+
   load_term_c(c)
 
-  st = time.time_ns()
+  run(100)
 
-  B = 100000
-  for i in range(100):
-    print(i)
-    steps = run(B)
-    if steps > -1:
-      res = unload_term_c()
-      t = time.time_ns() - st
-      print(f"{t/1e9} seconds for {steps} steps, {steps/t*1e3:.3f} Mips")
-      print(res)
-      break
+  
+
+
+
+  # st = time.time_ns()
+
+  # B = 100000
+  # for i in range(100):
+  #   print(i)
+  #   steps = run(B)
+  #   if steps > -1:
+  #     res = unload_term_c()
+  #     t = time.time_ns() - st
+  #     print(f"{t/1e9} seconds for {steps} steps, {steps/t*1e3:.3f} Mips")
+  #     print(res)
+  #     break

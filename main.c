@@ -324,6 +324,7 @@ int* serialize(Node* node){
   result[0] = ctr;
   ctr = 1;
 
+  if (DEBUG) printf("SERIALIZE: %d nodes\n", result[0]);
 
   while (1){
 
@@ -331,6 +332,7 @@ int* serialize(Node* node){
     result[ctr + 1] = current->node->label;
     result[ctr + 2] = current->s0;
     result[ctr + 3] = current->s1;
+    if (DEBUG) printf("  [%d] tag=%s label=%d s0=%d s1=%d\n", (ctr-1)/4 + 1, tag_name(current->node->tag), current->node->label, current->s0, current->s1);
     ctr += 4;
     S_Queue* prev = current;
     current = current->next;
@@ -345,7 +347,7 @@ int* serialize(Node* node){
 
 
 
-Node** dup(Node* target, int label){
+Node** mk_dup(Node* target, int label){
   Node* dup1 = new_node(Tag_Dup, label);
   Node* dup2 = new_node(Tag_Dup2, label);
   dup1->s1 = dup2;
@@ -409,7 +411,7 @@ void just_move(Node* src, Node* dst){
   dst->label = src->label;
   if (src->tag == Tag_Var){
     if (src->s0->tag != Tag_Lam){
-      printf("Error: Invalid tag for lam in move\n");
+      printf("Error: Var points to %s\n", tag_name(src->s0->tag));
       exit(1);
     }
     src->s0->s1 = dst;
@@ -480,8 +482,22 @@ void erase(Node* node){
   free_node(node);
 }
 
+void check_tags(Node* node, Node* other, Tag tag, Tag other_tag){
+  if (DEBUG){
+    printf("%s -> %s\n", tag_name(node->tag), tag_name(other->tag));
+  }
+  if (node->tag != tag){
+    printf("Error: node->tag: %s != %s\n", tag_name(node->tag), tag_name(tag));
+    exit(1);
+  }
+  if (other->tag != other_tag){
+    printf("Error: other->tag: %s != %s\n", tag_name(other->tag), tag_name(other_tag));
+    exit(1);
+  }
+}
+
 int APP_LAM(Node* App, Node* Lam){
-  debug("APP_LAM\n");
+  check_tags(App, Lam, Tag_App, Tag_Lam);
   if (Lam->s1 != NULL){
     move(App->s1, Lam->s1);
   }else{
@@ -493,18 +509,27 @@ int APP_LAM(Node* App, Node* Lam){
 }
 
 int APP_SUP(Node* App, Node* Sup){
-  debug("APP_SUP\n");
-  Node** dups = dup(App->s1, Sup->label);
+  check_tags(App, Sup, Tag_App, Tag_Sup);
+  Node** dups = mk_dup(App->s1, Sup->label);
   move(sup(app(Sup->s0, dups[0]), app(Sup->s1, dups[1]), Sup->label), App);
   return 1;
 }
 
 
+int APP_NULL(Node* App, Node* Null){
+  check_tags(App, Null, Tag_App, Tag_Null);
+  erase(App->s1);
+  move(Null, App);
+  return 1;
+}
 
-int DUP_LAM(Node* da, Node* db, Node* Lam){
-  debug("DUP->LAM\n");
+
+int DUP_LAM(Node* dup, Node* Lam){
+  check_tags(dup, Lam, dup->tag == Tag_Dup ? Tag_Dup : Tag_Dup2, Tag_Lam);
+  Node* da = dup->tag == Tag_Dup ? dup : dup->s1;
+  Node* db = dup->tag == Tag_Dup2 ? dup : dup->s1;
   int label = da == NULL ? db->label : da->label;
-  Node** dbody = dup(Lam->s0, label);
+  Node** dbody = mk_dup(Lam->s0, label);
   Node* funa = new_node(Tag_Lam,0);
   Node* funb = new_node(Tag_Lam,0);
   funa->s0 = dbody[0];
@@ -526,8 +551,10 @@ int DUP_LAM(Node* da, Node* db, Node* Lam){
   return 1;
 }
 
-int DUP_SUP(Node* da, Node* db, Node* Sup){
-  debug("DUP_SUP\n");
+int DUP_SUP(Node* dup, Node* Sup){
+  check_tags(dup, Sup, dup->tag == Tag_Dup ? Tag_Dup : Tag_Dup2, Tag_Sup);
+  Node* da = dup->tag == Tag_Dup ? dup : dup->s1;
+  Node* db = dup->tag == Tag_Dup2 ? dup : dup->s1;
   int label = da == NULL ? db->label : da->label;
   if (Sup->label == label){
     debug("DUP_SUP_SAME_LABEL\n");
@@ -550,8 +577,8 @@ int DUP_SUP(Node* da, Node* db, Node* Sup){
       }
     }
   } else {
-    Node** dup1 = dup(Sup->s0, label);
-    Node** dup2 = dup(Sup->s1, label);
+    Node** dup1 = mk_dup(Sup->s0, label);
+    Node** dup2 = mk_dup(Sup->s1, label);
     move(sup(dup1[0], dup2[0], Sup->label), da);
     move(sup(dup1[1], dup2[1], Sup->label), db);
     free(dup1);
@@ -560,6 +587,17 @@ int DUP_SUP(Node* da, Node* db, Node* Sup){
   free_node(Sup);
   return 1;
 }
+
+
+int DUP_NULL(Node* dup, Node* Null){
+  check_tags(dup, Null, dup->tag == Tag_Dup ? Tag_Dup : Tag_Dup2, Tag_Null);
+  Node* da = dup->tag == Tag_Dup ? dup : dup->s1;
+  Node* db = dup->tag == Tag_Dup2 ? dup : dup->s1;
+  just_move(Null, da);
+  move(Null, db);
+  return 1;
+}
+
 
 
 
@@ -613,10 +651,10 @@ int step(Node* term){
       Node* db = term->tag == Tag_Dup2 ? term : term->s1;
       switch (other->tag){
         case Tag_Lam:{
-          return DUP_LAM(da, db, other);
+          return DUP_LAM(term, other);
         }
         case Tag_Sup:{
-          return DUP_SUP(da, db, other);
+          return DUP_SUP(term, other);
         }
         case Tag_Null:{
           just_move(other, da);
@@ -647,107 +685,122 @@ int step(Node* term){
 
 
 
-// void search_redex(SearchStack stack){
-
-//   switch (stack.node->tag){
-//     case Tag_Lam:
-//       stack = (SearchStack){stack.node->s0, stack.next};
-//       search_redex(stack);
-//       return;
-//     case Tag_Sup:
-//       stack = (SearchStack){stack.node->s0, stack.next};
-//       search_redex(stack);
-//       stack = (SearchStack){stack.node->s1, stack.next};
-//       search_redex(stack);
-//       return;
-//     default:{
-//       int succ = step(stack.node);
-//       if (!succ){
-//         return;
-//       }
-//       search_redex(stack);
-//     }
-//   }
-// }
+int handle_redex(Node* term, Node* other){
+  switch (term->tag){
+    case Tag_App:
+      if (term->s1 == NULL){
+        printf("ERROR: App node has NULL s1 (argument)\n");
+        printf("  App at memory: %p\n", (void*)term);
+        printf("  App->s0 (function): %p (tag: %s)\n", (void*)term->s0, term->s0 ? tag_name(term->s0->tag) : "NULL");
+        printf("  App->s1 (argument): NULL\n");
+        printf("  Other (s0): %p (tag: %s)\n", (void*)other, tag_name(other->tag));
+        exit(1);
+      }
+      switch (other->tag){
+        case Tag_Lam: return APP_LAM(term, other);
+        case Tag_Sup: return APP_SUP(term, other);
+        case Tag_Null: return APP_NULL(term, other);
+        default: return 0;
+      }
+    case Tag_Dup: case Tag_Dup2:
+      switch (other->tag){
+        case Tag_Lam: return DUP_LAM(term, other);
+        case Tag_Sup: return DUP_SUP(term, other);
+        case Tag_Null: return DUP_NULL(term, other);
+        default: return 0;
+      }
+    default: return 0;
+  }
+}
 
 
 BST* searched_lams;
 
-void search_redex(Node* term){
+
+// return indicates whether term changed.
+int search_redex(Node* term){
+  // printf("search_redex %s -> %s\n", tag_name(term->tag), tag_name(term->s0->tag));
+  if (term == NULL){
+    return 0;
+  }
+  Node* other = term->s0;
+
+  if (other == NULL){
+    return 0;
+  }
+
+  if (handle_redex(term, other)){
+    search_redex(term);
+    return 1;
+  }
 
   switch (term->tag){
     case Tag_Lam:
-      insert_bst(searched_lams, term);
-      search_redex(term->s0);
-      return;
+      search_redex(other);
+      return 0;
     case Tag_Sup:
-
       search_redex(term->s0);
       search_redex(term->s1);
-      return;
-    case Tag_App:
-      if (term->s0->tag == Tag_Var && has_bst(searched_lams, term->s0->s0))
-      {
-        return;
+      return 0;
+    case Tag_Dup: case Tag_Dup2: case Tag_App:
+      if (search_redex(other)){
+        return search_redex(term);
       }
-    default:{
-
-      int succ = step(term);
-
-      if (!succ){
-        return;
-      }
-      runtime->steps ++;
-      search_redex(term);
-    }
+      // if (full_redex_search && term->tag == Tag_App){
+        // return search_redex(term->s1);
+      // }
+      return 0;
+    case Tag_Var:
+    case Tag_Null:
+      return 0;
   }
 }
 
 
 
 
-
-int run(int Nsteps){
-
-  int steps = 0;
-  Node* node = &(runtime->nodes[0]);
-  while (steps < Nsteps){
-    // full_redex_search = 0;
-    // while (steps < Nsteps){
-    //   if (!step(node)){
-    //     break;
-    //     // return runtime->steps;
-    //   }
-    //   runtime->steps ++;
-    //   steps ++;
-    // }
-    full_redex_search = 1;
-    while (steps < Nsteps){
-      visited = new_bst();
-      int succ = step(node);
-      free_bst(visited);
-      if (!succ){
-        return runtime->steps;
-      }else{
-        steps ++ ;
-        runtime->steps ++;
-      }
-    }
-  }
-  runtime->steps += steps;
-  return -1;
-}
 
 // int run(int Nsteps){
+
 //   int steps = 0;
-  
-//   Node* term = &(runtime->nodes[0]);
-//   full_redex_search = 0;
-//   searched_lams = new_bst();
-//   search_redex(term);
-//   free_bst(searched_lams);
-//   return runtime->steps;
+//   Node* node = &(runtime->nodes[0]);
+//   while (steps < Nsteps){
+//     // full_redex_search = 0;
+//     // while (steps < Nsteps){
+//     //   if (!step(node)){
+//     //     break;
+//     //     // return runtime->steps;
+//     //   }
+//     //   runtime->steps ++;
+//     //   steps ++;
+//     // }
+//     full_redex_search = 1;
+//     while (steps < Nsteps){
+//       visited = new_bst();
+//       int succ = step(node);
+//       free_bst(visited);
+//       if (!succ){
+//         return runtime->steps;
+//       }else{
+//         steps ++ ;
+//         runtime->steps ++;
+//       }
+//     }
+//   }
+//   runtime->steps += steps;
+//   return -1;
 // }
+
+int run(int Nsteps){
+  int steps = 0;
+  
+  Node* term = &(runtime->nodes[0]);
+  full_redex_search = 0;
+  searched_lams = new_bst();
+  search_redex(term);
+  free_bst(searched_lams);
+  return runtime->steps;
+}
 
 
 
@@ -779,12 +832,13 @@ void load(int* data){
   runtime->free_list = NULL;
   runtime->steps = 0;
 
-
   int count = data[0];
   if (count == 0) {
     printf("deserialize: count is 0\n");
     exit(1);
   }
+
+  if (DEBUG) printf("LOAD: %d nodes\n", count);
 
   Node** nodes = malloc(sizeof(void*) * (count + 1));
   nodes[0] = NULL;
@@ -793,6 +847,7 @@ void load(int* data){
     int idx = i * 4 + 1;
     Node* node = new_node(data[idx], data[idx + 1]);
     nodes[i + 1] = node;
+    if (DEBUG) printf("  created [%d] tag=%s label=%d\n", i + 1, tag_name(data[idx]), data[idx + 1]);
   }
   
   for (int i = 0; i < count; i++) {
@@ -801,6 +856,7 @@ void load(int* data){
     int s1_idx = data[idx + 3];
     nodes[i + 1]->s0 = nodes[s0_idx];
     nodes[i + 1]->s1 = nodes[s1_idx];
+    if (DEBUG) printf("  connected [%d] s0=%d s1=%d\n", i + 1, s0_idx, s1_idx);
   }
   
   Node* root = nodes[1];
@@ -808,6 +864,7 @@ void load(int* data){
     printf("deserialize: root is not the first node\n");
   }
   free(nodes);
+
 }
 
 int* unload(){

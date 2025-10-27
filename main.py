@@ -10,16 +10,33 @@ def to_c_data(node: Node) -> list[int]:
   nodes = []
   
   def visit(n: Node):
-    if n is None or n in ctx: return
-    ctx[n] = len(nodes) + 1
+    if n is None or n in ctx:
+      return
+    ctx[n] = len(nodes) + 1  # 1-indexed, 0 is NULL
     nodes.append(n)
     visit(n.s0)
     visit(n.s1)
   
   visit(node)
   
-  tag_map = {Tag.App: 0,Tag.Lam: 1, Tag.Sup: 2,Tag.Dup: 3,Tag.Dup2: 4,Tag.Null: 5,Tag.Var: 6}
+  # Validate that all Apps have both arguments
+  for i, n in enumerate(nodes):
+    if n.tag == Tag.App:
+      if n.s1 is None:
+        raise ValueError(f"Invalid App at index {i}: s1 (argument) is None. App must have both function (s0) and argument (s1). s0={n.s0}")
   
+  # Tag enum mapping to match C enum order
+  tag_map = {
+    Tag.App: 0,
+    Tag.Lam: 1, 
+    Tag.Sup: 2,
+    Tag.Dup: 3,
+    Tag.Dup2: 4,
+    Tag.Null: 5,
+    Tag.Var: 6,
+  }
+  
+  # Format: [count, tag1, label1, s0_idx1, s1_idx1, tag2, ...]
   data = [len(nodes)]
   for n in nodes:
     tag_int = tag_map.get(n.tag, 0)

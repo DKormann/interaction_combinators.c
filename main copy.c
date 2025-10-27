@@ -341,7 +341,7 @@ int* serialize(Node* node){
 
 
 
-Node** dup(Node* target, int label, Runtime* runtime){
+Node** mkdup(Node* target, int label, Runtime* runtime){
   Node* dup1 = new_node(runtime, Tag_Dup, label);
   Node* dup2 = new_node(runtime, Tag_Dup2, label);
   dup1->s1 = dup2;
@@ -490,7 +490,7 @@ int APP_LAM(Node* App, Node* Lam, Runtime* runtime){
 
 int APP_SUP(Node* App, Node* Sup, Runtime* runtime){
   debug("APP_SUP\n");
-  Node** dups = dup(App->s1, Sup->label, runtime);
+  Node** dups = mkdup(App->s1, Sup->label, runtime);
   move(sup(app(Sup->s0, dups[0], runtime), app(Sup->s1, dups[1], runtime), Sup->label, runtime), App, runtime);
   return 1;
 }
@@ -500,7 +500,7 @@ int APP_SUP(Node* App, Node* Sup, Runtime* runtime){
 int DUP_LAM(Node* da, Node* db, Node* Lam, Runtime* runtime){
   debug("DUP->LAM\n");
   int label = da == NULL ? db->label : da->label;
-  Node** dbody = dup(Lam->s0, label, runtime);
+  Node** dbody = mkdup(Lam->s0, label, runtime);
   Node* funa = new_node(runtime, Tag_Lam,0);
   Node* funb = new_node(runtime, Tag_Lam,0);
   funa->s0 = dbody[0];
@@ -546,8 +546,8 @@ int DUP_SUP(Node* da, Node* db, Node* Sup, Runtime* runtime){
       }
     }
   } else {
-    Node** dup1 = dup(Sup->s0, label, runtime);
-    Node** dup2 = dup(Sup->s1, label, runtime);
+    Node** dup1 = mkdup(Sup->s0, label, runtime);
+    Node** dup2 = mkdup(Sup->s1, label, runtime);
     move(sup(dup1[0], dup2[0], Sup->label, runtime), da, runtime);
     move(sup(dup1[1], dup2[1], Sup->label, runtime), db, runtime);
     free(dup1);

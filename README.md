@@ -62,6 +62,44 @@ Tests can now run in parallel without conflicts:
 pytest tests.py -n auto  # Run with pytest-xdist
 ```
 
+Each test will have its own isolated runtime instance, so there are no shared state conflicts!
+
+## Debugging: "App node has NULL s1"
+
+If you encounter an error "ERROR: App node has NULL s1 (argument)", this means an `App` (application) node was created without both a function and an argument. This should never happen in valid terms.
+
+### Causes and Solutions:
+
+1. **Invalid Python term construction** (Most likely):
+   - Problem: Manually creating an App node without setting s1
+   ```python
+   bad_app = Node(None)
+   bad_app.tag = Tag.App
+   bad_app.s0 = some_function
+   bad_app.s1 = None  # ❌ INVALID
+   ```
+   - Solution: Always use the `app()` helper function or ensure both s0 and s1 are set
+   ```python
+   from node import app
+   good_app = app(function, argument)  # ✓ CORRECT
+   ```
+
+2. **Incorrect term transformation**:
+   - Ensure your Python code creates complete App nodes
+   - Use the API functions: `app(f, x)`, `lam(body, var)`, etc.
+
+3. **Enable debug output to trace the issue**:
+   ```python
+   from node import DEBUG
+   DEBUG.set(True)  # Shows LOAD and SERIALIZE details
+   
+   result = run_term_c(your_term)  # Will print detailed info
+   ```
+
+4. **Check the serialization output**:
+   - With `DEBUG.set(True)`, look for lines like `[N] tag=App ... s1=0`
+   - If `s1=0`, it means the argument pointer is NULL
+
 ## TODO:
 
  - [x] python runtime
