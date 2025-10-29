@@ -181,8 +181,6 @@ typedef struct Runtime{
 Runtime* runtime;
 
 
-void check_node(Node* node);
-
 Node* new_node(Tag tag, int label){
   Node* node;
   if (runtime->free_list != NULL){
@@ -190,10 +188,6 @@ Node* new_node(Tag tag, int label){
     runtime->free_list = node->s0;
   }else{
     node = &runtime->nodes[runtime-> empty_index ++ ];
-    if (runtime->empty_index >= MAX_NODES){
-      printf("Error: MAX_NODES reached\n");
-      exit(1);
-    }
   }
   runtime->node_ctr ++;
   node->tag = tag;
@@ -385,7 +379,6 @@ Node* app(Node* f, Node* x){
   Node* res = new_node(Tag_App, 0);
   res->s0 = f;
   res->s1 = x;
-  check_node(res);
   return res;
 }
 
@@ -398,79 +391,6 @@ void print_term(Node* node){
   walk_term(node, print_tag);
 }
 
-
-
-
-
-void check_null(void* ptr, char* tag_name){
-  if (ptr == NULL){
-    printf("Error: %s is NULL\n", tag_name);
-    exit(1);
-  }
-}
-
-
-void check_node(Node* node){
-  if (node == NULL){
-    printf("Error: node is NULL\n");
-    exit(1);
-  }
-  switch (node->tag){
-    case Tag_Dup:
-      if (node->s1 != NULL && node->s1->tag != Tag_Dup2){
-        printf("Error: Dup->s0->tag == %s instead of Dup\n", tag_name(node->s0->tag));
-        exit(1);
-      }
-      check_null(node->s0, "Dup->s0");
-      break;
-    case Tag_Dup2:
-      if (node->s1 != NULL && node->s1->tag != Tag_Dup){
-        printf("Error: Dup2->s0->tag == %s instead of Dup\n", tag_name(node->s0->tag));
-        exit(1);
-      }
-      check_null(node->s0, "Dup->s0");
-      break;
-    case Tag_Var:
-      if (node->s0->tag != Tag_Lam){
-        printf("Error: Var->s0->tag %p == %s %p instead of Lam\n",node, tag_name(node->s0->tag), node->s0);
-        exit(1);
-      }
-      check_null(node->s0, "Var->s0");
-      break;
-    case Tag_Lam:
-      check_null(node->s0, "Lam->s0");
-      if (node->s1 != NULL && node->s1->tag != Tag_Var){
-        printf("Error: Lam->s1->tag == %s instead of Var\n", tag_name(node->s1->tag));
-        exit(1);
-      }
-      break;
-    case Tag_Sup:
-    case Tag_App:
-      check_null(node->s0, "App->s0");
-      check_null(node->s1, "App->s1");
-      break;
-    case Tag_Null:break;
-  }
-}
-
-
-void check_tags(Node* node, Node* other, Tag tag, Tag other_tag){
-
-  
-  check_node(node);
-  check_node(other);
-  if (DEBUG){
-    printf("%s -> %s\n", tag_name(tag), tag_name(other_tag));
-  }
-  if (node->tag != tag){
-    printf("check Error: node->tag: %s != %s\n", tag_name(node->tag), tag_name(tag));
-    exit(1);
-  }
-  if (other->tag != other_tag){
-    printf("check Error: other->tag: %s != %s\n", tag_name(other->tag), tag_name(other_tag));
-    exit(1);
-  }
-}
 
 
 
@@ -491,7 +411,10 @@ void just_move(Node* src, Node* dst){
   dst->label = src->label;
   if (src->tag == Tag_Var){
     if (src->s0->tag != Tag_Lam){
-      printf("Error: Invalid tag for lam in move\n");
+      printf("Error: Var points to %s instead of Lam\n", tag_name(src->s0->tag));
+      printf("  Var at: %p\n", (void*)src);
+      printf("  Var->s0 at: %p (tag: %s)\n", (void*)src->s0, tag_name(src->s0->tag));
+      printf("  Destination at: %p\n", (void*)dst);
       exit(1);
     }
     src->s0->s1 = dst;
@@ -509,17 +432,15 @@ void just_move(Node* src, Node* dst){
     }
   }
 
-  printf("just_move check_node\n");
-  check_node(dst);
-  printf("just_move OK\n");
-
 }
 
-
-
 void move(Node* src, Node* dst){
+  if (dst == NULL){
+    erase(src);
+    return;
+  }
   just_move(src,dst);
-  free_node(src);
+
 }
 
 
@@ -564,94 +485,59 @@ void erase(Node* node){
   free_node(node);
 }
 
-
-
-void _deepcheck(Node* term, BST* visited){
-  check_node(term);
-  switch (term->tag){
-    case Tag_App:
-      _deepcheck(term->s0, visited);
-      _deepcheck(term->s1, visited);
-    case Tag_Sup:
-      _deepcheck(term->s0, visited);
-      _deepcheck(term->s1, visited);
-      break;
-    case Tag_Lam:
-      _deepcheck(term->s0, visited);
-      break;
-    case Tag_Dup:
-    case Tag_Dup2:
-      if (has_bst(visited, term->s0)){
-        return;
-      }
-      insert_bst(visited, term->s0);
-      _deepcheck(term->s0, visited);
-      break;
-    case Tag_Null:
-      break;
-    case Tag_Var:
-      break;
-  };
+void check_tags(Node* node, Node* other, Tag tag, Tag other_tag){
+  if (DEBUG){
+    printf("%s -> %s\n", tag_name(node->tag), tag_name(other->tag));
+  }
+  if (node->tag != tag){
+    printf("Error: node->tag: %s != %s\n", tag_name(node->tag), tag_name(tag));
+    exit(1);
+  }
+  if (other->tag != other_tag){
+    printf("Error: other->tag: %s != %s\n", tag_name(other->tag), tag_name(other_tag));
+    exit(1);
+  }
 }
-
-
-void deepcheck(Node* term){
-  BST* visited = new_bst();
-  _deepcheck(term, visited);
-  free_bst(visited);
-}
-
-
 
 int APP_LAM(Node* App, Node* Lam){
-
-
   check_tags(App, Lam, Tag_App, Tag_Lam);
-
+  // Save the argument before we start modifying
   Node* arg = App->s1;
-  Node* var = Lam->s1;
+  // Handle the argument AFTER we've replaced App
   Node* body = Lam->s0;
-  move(body, App);
+  Node* var = Lam->s1;
   
+  // Atomically replace App with the body - this is done with just_move
+  // which copies all fields at once, so App is never in an invalid state
+  just_move(body, App);
+  
+  // Now handle the argument
   if (var != NULL){
     move(arg, var);
   }else{
-    printf("erase arg\n");
     erase(arg);
   }
-
-  printf("APP_LAM check_nodes\n");
-
-  printf("check_node App\n");
-  check_node(App);
-  if (var != NULL){
-    printf("check_node var\n");
-    check_node(var);
-  }
-
-  printf("APP_LAM OK\n");
-
+  
   free_node(Lam);
   return 1;
 }
 
 int APP_SUP(Node* App, Node* Sup){
   check_tags(App, Sup, Tag_App, Tag_Sup);
-  printf("app arg:%s %p\n", tag_name(App->s1->tag), App->s1);
   Node** dups = mk_dup(App->s1, Sup->label);
-  printf("APP_SUP dups[0] %p\n", dups[0]);
-  printf("APP_SUP dups[1] %p\n", dups[1]);
-  
   move(sup(app(Sup->s0, dups[0]), app(Sup->s1, dups[1]), Sup->label), App);
-
   return 1;
 }
 
 
 int APP_NULL(Node* App, Node* Null){
   check_tags(App, Null, Tag_App, Tag_Null);
-  erase(App->s1);
-  move(Null, App);
+  // Save the argument pointer first
+  Node* arg = App->s1;
+  // Atomically replace App with Null
+  just_move(Null, App);
+  // Now erase the saved argument
+  erase(arg);
   return 1;
 }
 
@@ -675,47 +561,24 @@ int DUP_LAM(Node* dup, Node* Lam){
     funb->s1 = new_node(Tag_Var, 0);
     funb->s1->s0 = funb;
     move(sup(funa->s1, funb->s1, label), Lam->s1);
-    check_node(Lam->s1);
-    check_node(funa->s1);
-    check_node(funb->s1);
+
   }
   free_node(Lam);
   move(funa, da);
   move(funb, db);
-
-  printf("DUP_LAM OK?\n");
-  if (da != NULL){
-    check_node(da);
-    check_node(da->s0);
-    if (da->s1 != NULL){
-      check_node(da->s1);
-    }
-  }
-  if (db != NULL){
-    check_node(db);
-    check_node (db->s0);
-    if (db->s1 != NULL){
-      check_node(db->s1);
-    }
-  }
-  if (Lam->s1 != NULL){
-    check_node(Lam->s1);
-    
-  }
-  printf("DUP_LAM OK\n");
-
   return 1;
 }
 
 int DUP_SUP(Node* dup, Node* Sup){
-
   check_tags(dup, Sup, dup->tag == Tag_Dup ? Tag_Dup : Tag_Dup2, Tag_Sup);
   Node* da = dup->tag == Tag_Dup ? dup : dup->s1;
   Node* db = dup->tag == Tag_Dup2 ? dup : dup->s1;
   int label = da == NULL ? db->label : da->label;
   if (Sup->label == label){
+    debug("DUP_SUP_SAME_LABEL\n");
 
     if (Sup->s0 == db || Sup->s1 == db){
+      debug("DUP_SUP_SAME_LABEL_SAME_DB\n");
       move(Sup->s1, db);
       move(Sup->s0, da);
     }else{
@@ -739,7 +602,6 @@ int DUP_SUP(Node* dup, Node* Sup){
     free(dup1);
     free(dup2);
   }
-
   free_node(Sup);
   return 1;
 }
@@ -760,66 +622,124 @@ int DUP_NULL(Node* dup, Node* Null){
 int full_redex_search = 1;
 BST* visited;
 
-int fuel = 0;
+int step(Node* term){
 
-
-int handle_redex(Node* term, Node* other){
-  if (fuel < runtime->steps){
+  if (term == NULL){
     return 0;
   }
 
-  int (*handler)(Node*, Node*) = NULL;
+  Node* other = term->s0;
+  if (other == NULL){
+    return 0;
+  }
+  if (DEBUG){ printf("step %s -> %s\n", tag_name(term->tag), tag_name(other->tag));}
 
   switch (term->tag){
-    case Tag_App: {
+    case Tag_App:
       switch (other->tag){
-        case Tag_Lam: {handler = APP_LAM; break;}
-        case Tag_Sup: {handler = APP_SUP; break;}
-        case Tag_Null: {handler = APP_NULL; break;}
-        default: break;
-      };
+        case Tag_Lam: return APP_LAM(term, other);
+        case Tag_Sup: return APP_SUP(term, other);
+        case Tag_Dup:
+        case Tag_Dup2:
+        case Tag_App:
+          if (step(other)){
+            return 1;
+          }
+          if (full_redex_search){
+            return step(term->s1);
+          }
+          return 0;
+        case Tag_Var: return step(term->s1);
+        case Tag_Null:
+          erase(term->s1);
+          move(other, term);
+      }
       break;
-    };
+    case Tag_Sup: return step(other) || step(term->s1);      
+    case Tag_Lam: return step(other);
+
     case Tag_Dup: case Tag_Dup2:{
+      if (full_redex_search){
+        if (has_bst(visited, other)){
+          return 0;
+        }
+        insert_bst(visited, other);
+      }
+      Node* da = term->tag == Tag_Dup ? term : term->s1;
+      Node* db = term->tag == Tag_Dup2 ? term : term->s1;
       switch (other->tag){
-        case Tag_Lam: {handler = DUP_LAM; break;}
-        case Tag_Sup: {handler = DUP_SUP; break;}
-        case Tag_Null: {handler = DUP_NULL; break;}
-        default: break;
-      };
+        case Tag_Lam:{
+          return DUP_LAM(term, other);
+        }
+        case Tag_Sup:{
+          return DUP_SUP(term, other);
+        }
+        case Tag_Null:{
+          just_move(other, da);
+          move(other, db);          
+          return 1;
+        }
+        case Tag_App:{
+          return step(other);
+        }
+        case Tag_Var:{
+          return 0;
+        }
+        case Tag_Dup:
+        case Tag_Dup2:{
+          return step(other);
+        }
+      }
       break;
     }
-    default: break;
-  };
-  if (handler != NULL){
-
-    printf("handle_redex %s -> %s\n", tag_name(term->tag), tag_name(other->tag));
-
-    handler(term, other);
-
-    printf("deepcheck\n");
-
-    deepcheck(&runtime->nodes[0]);
-
-    printf("OK\n");
-
-    return 1;
-
+    case Tag_Var:
+    case Tag_Null:
+      return 0;
   }
+  printf("TODO: handle %s -> %s\n", tag_name(term->tag), tag_name(other->tag));
   return 0;
 }
 
 
 
+
+int handle_redex(Node* term, Node* other){
+  switch (term->tag){
+    case Tag_App:
+      if (term->s1 == NULL){
+        printf("ERROR: App node has NULL s1 (argument)\n");
+        printf("  App at memory: %p\n", (void*)term);
+        printf("  App->s0 (function): %p (tag: %s)\n", (void*)term->s0, term->s0 ? tag_name(term->s0->tag) : "NULL");
+        printf("  App->s1 (argument): NULL\n");
+        printf("  Other (s0): %p (tag: %s)\n", (void*)other, tag_name(other->tag));
+        printf("  This is likely an intermediate state from a reduction rule\n");
+        printf("  Not attempting reduction on incomplete node\n");
+        return 0;  // Don't reduce, skip this node
+      }
+      switch (other->tag){
+        case Tag_Lam: return APP_LAM(term, other);
+        case Tag_Sup: return APP_SUP(term, other);
+        case Tag_Null: return APP_NULL(term, other);
+        default: return 0;
+      }
+    case Tag_Dup: case Tag_Dup2:
+      switch (other->tag){
+        case Tag_Lam: return DUP_LAM(term, other);
+        case Tag_Sup: return DUP_SUP(term, other);
+        case Tag_Null: return DUP_NULL(term, other);
+        default: return 0;
+      }
+    default: return 0;
+  }
+}
+
+
 BST* searched_lams;
 
 
+// return indicates whether term changed.
 int search_redex(Node* term){
-
-  debug("search_redex\n");
-
-  
-
+  // printf("search_redex %s -> %s\n", tag_name(term->tag), tag_name(term->s0->tag));
   if (term == NULL){
     return 0;
   }
@@ -828,11 +748,6 @@ int search_redex(Node* term){
   if (other == NULL){
     return 0;
   }
-
-  printf("pre search check\n");
-  check_node(term);
-  check_node(other);
-  printf("OK\n");
 
   if (handle_redex(term, other)){
     search_redex(term);
@@ -848,7 +763,12 @@ int search_redex(Node* term){
       search_redex(term->s1);
       return 0;
     case Tag_Dup: case Tag_Dup2: case Tag_App:
-      if (search_redex(other)) return search_redex(term);
+      if (search_redex(other)){
+        return search_redex(term);
+      }
+      // if (full_redex_search && term->tag == Tag_App){
+        // return search_redex(term->s1);
+      // }
       return 0;
     case Tag_Var:
     case Tag_Null:
@@ -857,20 +777,19 @@ int search_redex(Node* term){
 }
 
 
+
+
+
+
 int run(int Nsteps){
-
-  fuel = Nsteps;
-
-
-  if (DEBUG) printf("RUN %d\n", Nsteps);
   int steps = 0;
+  
   Node* term = &(runtime->nodes[0]);
   full_redex_search = 0;
   searched_lams = new_bst();
   search_redex(term);
   free_bst(searched_lams);
   return runtime->steps;
-
 }
 
 
@@ -946,7 +865,6 @@ int* unload(){
   }
 
   Node* node = &(runtime->nodes[0]);
-
 
   int* result = serialize(node);
   free(runtime);

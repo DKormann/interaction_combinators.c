@@ -82,32 +82,40 @@ def eq()->Node:
 from example import cnat
 import time
 
-if __name__ == "__main__":  
 
-  hide_dups.set(True)
-  # print_tree.set(False)
-
-  # c = cnat(2)(cnat(2))
-
-  # print(c)
-
-  # load_term_c(c)
-
-  # run(100000)
-
-  # res = unload_term_c()
+def run_c_2_2():
+  c = cnat(2)(cnat(2))
+  print(c)
+  res = run_term_c(c, 1)
+  print(res)
+  res = run_term_c(c, 1)
+  print(res)
+  with hide_dups(True): print(res)
+  # res = run_term_c(c, 1)
+  # print(res)
+  # res = run_term_c(c, 1)
   # print(res)
 
-  
+
+def run_scott_eq_3():
   N = 3
   c = eq()(nat(N), nat(N-1))
+  print(c)
+  c = run_term_c(c,1)
+  print(c)
 
-  load_term_c(c)
 
-  run(100)
 
-  
+  with hide_dups(True): print(c)
 
+if __name__ == "__main__":  
+
+  # hide_dups.set(True)
+
+  # run_c_2_2()
+  # exit()
+
+  run_scott_eq_3()
 
 
   # st = time.time_ns()
