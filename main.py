@@ -37,8 +37,6 @@ def to_c_data(node: Node) -> list[int]:
   
   visit(node)
 
-  
-  # Validate that all Apps have both arguments
   for i, n in enumerate(nodes):
     if n.tag == Tag.App:
       if n.s1 is None:
@@ -63,14 +61,13 @@ def to_c_data(node: Node) -> list[int]:
     Tag.Var: 6,
   }
   
-  # Format: [count, tag1, label1, s0_idx1, s1_idx1, tag2, ...]
   data = [len(nodes)]
   for i, n in enumerate(nodes):
     tag_int = tag_map.get(n.tag, 0)
     s0_idx = ctx.get(n.s0, 0)
     s1_idx = ctx.get(n.s1, 0)
 
-    print(f"{i}: to_c_data: {n.tag} {s0_idx} {s1_idx}")
+    if DEBUG: print(f"{i}: to_c_data: {n.tag} {s0_idx} {s1_idx}")
 
 
     match n.tag:
@@ -153,16 +150,14 @@ def unload_term_c() -> Node:
   res = from_c_data(lib.unload())
   return res
 
-def run(steps:int):
+def run(steps:int = 1e6):
   lib = get_lib()
-  return lib.run(steps)
+  return lib.run(int(steps))
 
-def run_term_c(term:Node, steps: int = int(1e6)) -> Node:
-  print("running term")
+def run_term_c(term:Node, steps: int = 1e6) -> Node:
   load_term_c(term)
   steps = run(int(steps))
   res = unload_term_c()
-  print("ran term")
   return res
 
 if __name__ == "__main__":

@@ -205,7 +205,8 @@ def tree(term:Node, ctx:dict[Node, int])->str:
   ws = "  " if print_tree else ""
   def varname(node:Node | None):
     if node is None: return ""
-    return ctx.setdefault(node, chr(len(ctx) + 97))
+    name = chr(len(ctx) % 26 + 97) + ("" if len(ctx) < 26 else chr(len(ctx) // 26 + 97))
+    return ctx.setdefault(node, name)
   def idn(lns:list[str], end = "")->list[str]:
     lns = lns[:-1] + [lns[-1] + end]
     if sum(len(ln) for ln in lns) <= 20: return [ws + " ".join(map(str.strip, lns))]
