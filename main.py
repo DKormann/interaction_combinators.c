@@ -8,6 +8,13 @@ def to_c_data(node: Node) -> list[int]:
   """Serialize a Node graph to a flat int array for passing to C"""
   ctx = {}
   nodes = []
+
+  taken = {}
+  
+  def take(owner: Node, owned: Node):
+    if owned in taken:
+      raise ValueError(f"Node {owned} is already taken by {taken[owned]}")
+    taken[owned] = owner
   
   def visit(n: Node):
     if n is None or n in ctx:
@@ -16,14 +23,34 @@ def to_c_data(node: Node) -> list[int]:
     nodes.append(n)
     visit(n.s0)
     visit(n.s1)
+
+    match n.tag:
+      case Tag.App:
+        take(n, n.s0)
+        take(n, n.s1)
+      case Tag.Lam:
+        take(n, n.s0)
+      case Tag.Sup:
+        take(n, n.s0)
+        take(n, n.s1)
+
   
   visit(node)
+
   
   # Validate that all Apps have both arguments
   for i, n in enumerate(nodes):
     if n.tag == Tag.App:
       if n.s1 is None:
         raise ValueError(f"Invalid App at index {i}: s1 (argument) is None. App must have both function (s0) and argument (s1). s0={n.s0}")
+  
+  taken = set[int]()
+
+  def take(n:int):
+    if n and n in taken:
+      raise ValueError(f"Node {n} is already taken")
+    taken.add(n)
+
   
   # Tag enum mapping to match C enum order
   tag_map = {
@@ -38,11 +65,31 @@ def to_c_data(node: Node) -> list[int]:
   
   # Format: [count, tag1, label1, s0_idx1, s1_idx1, tag2, ...]
   data = [len(nodes)]
-  for n in nodes:
+  for i, n in enumerate(nodes):
     tag_int = tag_map.get(n.tag, 0)
     s0_idx = ctx.get(n.s0, 0)
     s1_idx = ctx.get(n.s1, 0)
+
+    print(f"{i}: to_c_data: {n.tag} {s0_idx} {s1_idx}")
+
+
+    match n.tag:
+      case Tag.App:
+        take(s0_idx)
+        take(s1_idx)
+      case Tag.Lam:
+        take(s0_idx)
+      case Tag.Sup:
+        take(s0_idx)
+        take(s1_idx)
+      case Tag.Dup:
+        take(s0_idx)
+
+
+
     data.extend([tag_int, n.label or 0, s0_idx, s1_idx])
+
+
   
   return data
 

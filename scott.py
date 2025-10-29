@@ -59,9 +59,9 @@ def rec_copy()->Node:
   )
 
 
-T : Node = Node(lambda t, f: t)
-F : Node = Node(lambda t, f: f)
+def T()->Node: return Node(lambda t, f: t)
 
+def F()->Node: return Node(lambda t, f: f)
 
 
 def eq()->Node:
@@ -91,17 +91,15 @@ def run_c_2_2():
   res = run_term_c(c, 1)
   print(res)
   with hide_dups(True): print(res)
-  # res = run_term_c(c, 1)
-  # print(res)
-  # res = run_term_c(c, 1)
-  # print(res)
+
 
 
 def run_scott_eq_3():
   N = 3
   c = eq()(nat(N), nat(N-1))
+  
   print(c)
-  c = run_term_c(c,1)
+  c = run_term_c(c,100)
   print(c)
 
 

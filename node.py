@@ -56,6 +56,7 @@ class Node:
     self.s0 = None if s0 is None else Node.into(s0)
     self.s1 = None if s1 is None else Node.into(s1)
     self.label = label
+
     if isinstance(tag, Tag): self.tag = tag
     else: move(Node.into(tag),self)
   def __str__(self)->str: return tree(self, {})
@@ -75,6 +76,8 @@ class Node:
   def into(arg)->"Node":
     if isinstance(arg, Node): return arg
     if callable(arg):
+
+      if arg.__code__.co_argcount == 0: return arg()
 
       l = Node(Tag.Lam, null(), None)
       v = Node(Tag.Var, l)
@@ -110,6 +113,8 @@ def mk_curried(arg:Callable)->Callable:
     if len(args) == arg.__code__.co_argcount: return arg(*args)
     return curried
   return curried
+
+
 
 
 
