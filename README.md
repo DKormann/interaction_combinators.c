@@ -111,6 +111,7 @@ If you encounter an error "ERROR: App node has NULL s1 (argument)", this means a
     - [ ] garbage collection
       - [ ] correctly collect dup targets
     - [ ] parallel
+ - [ ] type system based on ICC
 
 
 

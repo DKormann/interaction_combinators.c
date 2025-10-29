@@ -215,6 +215,7 @@ char* tag_name(int tag){
     case Tag_Dup2: return "Dup2";
     case Tag_Null: return "Null";
     case Tag_Var: return "Var";
+    case Tag_Freed: return "Freed";
   }
   return "UNK tag";
 }
@@ -265,6 +266,10 @@ Node* new_node(Tag tag, int label){
 
 
 void free_node(Node* node){
+  if (node->tag == Tag_Freed){
+    printf("Error: Node %p is already freed\n", node);
+    exit(1);
+  }
   printf("free node %s %p\n", tag_name(node->tag), node);
   node->tag = Tag_Freed;
   runtime->node_ctr --;
@@ -529,12 +534,6 @@ void erase(Node* node);
 
 void just_move(Node* src, Node* dst){
 
-  if (dst == NULL){
-    erase(src);
-    return;
-  }
-
-
   dst->tag = src->tag;
   dst->s0 = src->s0;
   dst->s1 = src->s1;
@@ -566,7 +565,13 @@ void just_move(Node* src, Node* dst){
 
 
 void move(Node* src, Node* dst){
-  printf("move %s %p -> %s %p\n", tag_name(src->tag), src, tag_name(dst->tag), dst);
+
+
+  if (dst == NULL){
+    erase(src);
+    return;
+  }
+  printf("move %s %p -> %p\n", tag_name(src->tag), src, dst);
   just_move(src,dst);
   free_node(src);
 }
@@ -627,7 +632,7 @@ void own(Node* owned){
 }
 
 void _deepcheck(Node* term, BST* visited){
-  printf("check node %s %p -> %p\n", tag_name(term->tag), term, term->s0);
+  // printf("check node %s %p -> %p\n", tag_name(term->tag), term, term->s0);
   check_node(term);
   switch (term->tag){
     case Tag_App:
@@ -745,6 +750,8 @@ int DUP_LAM(Node* dup, Node* Lam){
 
   Node* funa = new_node(Tag_Lam,0);
   Node* funb = new_node(Tag_Lam,0);
+
+  printf("funa, funb:%p %p\n", funa, funb);
   funa->s0 = dbody[0];
   funb->s0 = dbody[1];
 
@@ -761,8 +768,12 @@ int DUP_LAM(Node* dup, Node* Lam){
     debug("DUP_LAM Lam->s1 == NULL\n");
   }
   free_node(Lam);
+
   move(funa, da);
+  printf("DUP_LAM funb->db\n");
   move(funb, db);
+
+  printf("DUP_LAM DONE\n");
 
 
 
