@@ -108,16 +108,18 @@ def from_c_data(res:ctypes.POINTER(ctypes.c_int))->Node:
 
 so_path = os.path.join("./.tmp", "main.so")
 c_cache_path = os.path.join("./.tmp", "c_hash")
+main_path = os.path.join(os.path.dirname(__file__), "main.c")
+main_path = os.path.join(os.path.dirname(__file__), "mini.c")
 
 
-with open("main.c", "rb") as f: c_hash = hashlib.md5(f.read()).hexdigest()
+with open(main_path, "rb") as f: c_hash = hashlib.md5(f.read()).hexdigest()
 
 def compile_c():
   with open(c_cache_path, "w") as f:
     f.write(c_hash)
   print("Compiling...")
   os.makedirs("./.tmp", exist_ok=True)
-  subprocess.check_call(["clang", "-shared", "-O2", "-fPIC", "main.c", "-o", so_path])
+  subprocess.check_call(["clang", "-shared", "-O2", "-fPIC", main_path, "-o", so_path])
 
 if not os.path.exists(c_cache_path): compile_c()
 else:
@@ -160,14 +162,14 @@ def run_term_c(term:Node, steps: int = 1e6) -> Node:
   res = unload_term_c()
   return res
 
-if __name__ == "__main__":
-  term = cnat(2)(cnat(2))
-  print(term)
-  load_term_c(term)
-  run(100)
-  res = unload_term_c()
+# if __name__ == "__main__":
+#   term = cnat(2)(cnat(2))
+#   print(term)
+#   load_term_c(term)
+#   run(100)
+#   res = unload_term_c()
 
-  print(res)
-  with hide_dups(True):
-    print(res)
+#   print(res)
+#   with hide_dups(True):
+#     print(res)
 
