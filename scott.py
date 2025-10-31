@@ -86,9 +86,15 @@ def eq()->Node:
 
 def run_c_2_2():
   c = cnat(2)(cnat(2))
-  for i in range(6):
-    c = run_term_c(c, 1)
+  print(c)
+  for i in range(10):
+
+    load_term_c(c)
+    steps = run(20)
+    if not steps: break
+    c = unload_term_c()
     print(c)
+
   with hide_dups(True): print(c)
 
 
@@ -122,6 +128,8 @@ if __name__ == "__main__":
   # run_c_2_2()
 
   run_scott_eq_3()
+
+
 
 
   # st = time.time_ns()

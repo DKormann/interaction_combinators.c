@@ -17,6 +17,7 @@ class Tag(Enum):
   Dup = auto()
   Dup2 = auto()
   Sup = auto()
+  Freed = auto()
 
   def __str__(self)->str: return self.name
   def __repr__(self)->str: return self.name
@@ -36,6 +37,7 @@ class Env:
   def __bool__(self)->bool: return bool(self.value)
   def __int__(self)->int: return int(self.value)
   def __lt__(self, other)->bool: return self.value < int(other)
+  def __gt__(self, other)->bool: return self.value > int(other)
   def __eq__(self, other)->bool: return self.value == int(other)
 
   @contextmanager

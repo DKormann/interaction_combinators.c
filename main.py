@@ -47,6 +47,7 @@ def to_c_data(node: Node) -> list[int]:
     Tag.Dup2: 4,
     Tag.Null: 5,
     Tag.Var: 6,
+    Tag.Freed: 7,
   }
   
   data = [len(nodes)]
@@ -62,6 +63,7 @@ def to_c_data(node: Node) -> list[int]:
 def from_c_data(res:ctypes.POINTER(ctypes.c_int))->Node:
 
 
+  tags = [Tag.App, Tag.Lam, Tag.Sup, Tag.Dup, Tag.Dup2, Tag.Null, Tag.Var, Tag.Freed]
 
   l = res[0]
   if l == -1: raise RuntimeError("Segmentation fault occurred in C code")
@@ -69,13 +71,16 @@ def from_c_data(res:ctypes.POINTER(ctypes.c_int))->Node:
   nodes = [None] + [Node(None) for _ in range(l)]
 
   for i in range(l):
-    nodes[i + 1].tag = [Tag.App, Tag.Lam, Tag.Sup, Tag.Dup, Tag.Dup2, Tag.Null, Tag.Var][res[i * 4 + 1]]
+    if DEBUG>1: print(res[i * 4 + 1])
+    nodes[i + 1].tag = tags[res[i * 4 + 1]]
     nodes[i + 1].label = res[i * 4 + 2]
     nodes[i + 1].s0 = nodes[res[i * 4 + 3]]
     nodes[i + 1].s1 = nodes[res[i * 4 + 4]]
 
+  def refcount(node:Node)->int: return sum((n.s0 == node) + (n.s1 == node) for n in nodes[1:])
+
   for node in nodes[1:]:
-    if node.tag == Tag.Lam and sum((n.s0 == node.s1) + (n.s1 == node.s0) for n in nodes[1:]) < 2: node.s1 = None
+    if node.tag == Tag.Lam and refcount(node.s1) < 2: node.s1 = None
 
   return nodes[1]
 

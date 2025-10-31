@@ -483,7 +483,8 @@ SearchStack* redex_seen = NULL;
 
 int search_redex(Node* term){
 
-  printf("search_redex %s\n", tag_name(term->tag));
+  if (fuel <= runtime->steps) return 0;
+
 
   if (term == NULL || term->s0 == NULL) return 0;
   Node* other = term->s0;
@@ -503,21 +504,20 @@ int search_redex(Node* term){
       return 0;
     case Tag_Dup: case Tag_Dup2:
 
-      // if (full_search){
-      //   if (stack_has(redex_seen, term->s0)) {
-      //     printf("stack_has %p\n", term->s0);
-      //     return 0;
-      //   }
-      //   stack_push(&redex_seen, term->s0);
-      // }
+      if (full_search){
+        if (stack_has(redex_seen, term->s0)) {
+          return 0;
+        }
+        stack_push(&redex_seen, term->s0);
+      }
       if (search_redex(other)) return search_redex(term);
 
       return 0;
     case Tag_App:
       if (search_redex(other)) return search_redex(term);
-      // if (full_search){
-      //   search_redex(term->s1);
-      // }
+      if (full_search){
+        search_redex(term->s1);
+      }
       return 0;
     
     case Tag_Var: case Tag_Null: return 0;
@@ -529,7 +529,15 @@ int search_redex(Node* term){
 
 int run(int Nsteps){
   fuel = Nsteps;
+
+  full_search = 0;
   search_redex(&(runtime->nodes[0]));
+
+  full_search = 1;
+  redex_seen = NULL;
+  search_redex(&(runtime->nodes[0]));
+  stack_free(&redex_seen);
+
   return runtime->steps;
 }
 
