@@ -7,7 +7,13 @@
 
 
 
+static jmp_buf segfault_jmp;
+static volatile sig_atomic_t segfault_occurred = 0;
 
+void segfault_handler(int sig) {
+  segfault_occurred = 1;
+  longjmp(segfault_jmp, 1);
+}
 
 int DEBUG = 1;
 
@@ -19,9 +25,6 @@ void set_debug(int debug){
 #define GREEN   "\x1b[32m"
 #define YELLOW  "\x1b[33m"
 #define BLUE    "\x1b[34m"
-#define MAGENTA "\x1b[35m"
-#define CYAN    "\x1b[36m"
-#define WHITE   "\x1b[37m"
 #define RESET   "\x1b[0m"
 
 void debug(char* content){
@@ -34,133 +37,6 @@ void error(char* content){
   fprintf(stderr, RED "Error: %s\n" RESET, content);
   exit(1);
 }
-
-
-typedef struct BST{
-  int is_leaf;
-  unsigned long value;
-  struct BST* left;
-  struct BST* right;
-} BST;
-
-typedef struct BSTLeaf{
-  int is_leaf;
-  unsigned long value;
-} BSTLeaf;
-
-
-unsigned long hash_ptr(void* ptr){
-  return ((unsigned long)ptr) * 83794261827 + 3489;
-}
-
-void _insert_bst(BST* tree, unsigned long value){
-  if (tree->value == value){
-    return;
-  }
-  int tree_bigger = tree->value > value;
-  BST* next = tree_bigger ? tree->left : tree->right;
-  if (next->is_leaf){
-    BST* node = malloc(sizeof(BST));
-    BST* leaf = malloc(sizeof(BSTLeaf));
-    leaf->is_leaf = 1;
-    leaf->value = value;
-    node->is_leaf = 0;
-    int next_bigger = next->value > value;
-    node->value = next_bigger ? value : next->value;
-    node->left = next_bigger ? leaf : next;
-    node->right = next_bigger ? next : leaf;
-    if (tree_bigger){
-      tree->left = node;
-    }else{
-      tree->right = node;
-    }
-  }else{
-    _insert_bst(next, value);
-  }
-}
-
-void insert_bst(BST* tree, void* value){
-  _insert_bst(tree, hash_ptr (value));
-}
-
-void _remove_bst(BST** tree, unsigned long value){
-  if ((*tree)->is_leaf){
-    error("remove on leaf error\n");
-  }
-  int tree_be = (*tree)->value >=  value;
-  BST* next = tree_be? (*tree)->left : (*tree)->right;
-  if (next->is_leaf){
-    if (next->value == value){
-      free(next);
-      BST* other = tree_be ? (*tree)->right : (*tree)->left;
-      BST*old = *tree;
-      (*tree) = other;
-      free(old);
-      return;
-    }
-  }else{
-    if (tree_be){ _remove_bst(&((*tree)->left), value);
-    }else{ _remove_bst(&((*tree)->right), value);}
-  }
-}
-
-void remove_bst(BST** tree, void* value){
-  _remove_bst(tree, hash_ptr(value));
-}
-
-int _has_bst(BST* tree, unsigned long value){
-  if (tree->value == value){
-    return 1;
-  }
-  if (tree->is_leaf){
-    return 0;
-  }
-  return _has_bst(tree->value > value ? tree->left : tree->right, value);
-}
-
-int has_bst(BST* tree, void* value){
-  return _has_bst(tree, hash_ptr(value));
-}
-
-void _print_bst(BST* tree, int indent){
-
-  if (tree->is_leaf){
-    printf("%lu\n", tree->value);
-  }else{
-    _print_bst(tree->left, indent + 1);
-    _print_bst(tree->right, indent + 1);
-  }
-}
-
-void print_bst(BST* tree){
-  printf("BST: ");
-  _print_bst(tree->right->right, 0);
-  printf("\n");
-}
-
-void free_bst(BST* tree){
-  if (tree->is_leaf){
-    free(tree);
-  }else{
-    free_bst(tree->left);
-    free_bst(tree->right);
-    free(tree);
-  }
-}
-
-BST* new_bst(){
-  BST* tree = malloc(sizeof(BST));
-  tree->is_leaf = 0;
-  tree->value = 0;
-  tree->left = malloc(sizeof(BSTLeaf));
-  tree->left->is_leaf = 1;
-  tree->left->value = 0;
-  tree->right = malloc(sizeof(BSTLeaf));
-  tree->right->is_leaf = 1;
-  tree->right->value = 0;
-  return tree;
-};
-
 
 typedef enum Tag{
   Tag_App,
@@ -180,7 +56,7 @@ typedef struct Node{
   struct Node* s1;
 }Node;
 
-#define MAX_NODES 1000000
+#define MAX_NODES 1<<20
 
 typedef struct Runtime{
   Node nodes[MAX_NODES];
@@ -192,23 +68,11 @@ typedef struct Runtime{
 
 Runtime* runtime;
 
-char* tag_name(int tag){
-  if (tag == 10){
-    return "FREED";
-  }
-  switch (tag){
-    case Tag_App: return "App";
-    case Tag_Lam: return "Lam";
-    case Tag_Sup: return "Sup";
-    case Tag_Dup: return "Dup";
-    case Tag_Dup2: return "Dup2";
-    case Tag_Null: return "Null";
-    case Tag_Var: return "Var";
-    case Tag_Freed: return "Freed";
-  }
-  return "UNK tag";
-}
+char* tag_names[8] = { "App", "Lam", "Sup", "Dup", "Dup2", "Null", "Var", "Freed" };
 
+char * tag_name(int tag){
+  return tag_names[tag];
+}
 
 
 void check_node(Node* node);
@@ -230,18 +94,21 @@ Node* new_node(Tag tag, int label, Node* s0, Node* s1){
   node->label = label;
   node->s0 = s0;
   node->s1 = s1;
-  if (DEBUG)printf("new node: %s %p\n", tag_name(tag), node);
+  if (DEBUG >= 2) printf("new node: %s %p\n", tag_name(tag), node);
   return node;
 }
 
 
 
 void free_node(Node* node){
-  if (node->tag == Tag_Freed){
+  if (DEBUG && node->tag == Tag_Freed){
     printf("Error: Node %p is already freed\n", node);
     exit(1);
   }
-  if (DEBUG) printf("free node %s %p\n", tag_name(node->tag), node);
+  if (DEBUG >= 2){
+    printf("free node %p ", node);
+    printf("tag: %s ", tag_name(node->tag));
+  }
   node->tag = Tag_Freed;
   runtime->node_ctr --;
   node->s0 = runtime->free_list;
@@ -260,68 +127,16 @@ typedef struct SearchStack{
   struct SearchStack* next;
 } SearchStack;
 
-static jmp_buf segfault_jmp;
-static volatile sig_atomic_t segfault_occurred = 0;
-
-void segfault_handler(int sig) {
-  segfault_occurred = 1;
-  longjmp(segfault_jmp, 1);
-}
-
-
-void walk_cached(Node* node, void callback(Node*), BST* visited){
-  if (node == NULL){
-    return;
-  }
-  
-  callback(node);
-  switch (node->tag){
-    case Tag_App:
-    case Tag_Sup:
-      walk_cached(node->s0, callback, visited);
-      walk_cached(node->s1, callback, visited);
-      break;
-    case Tag_Lam:
-      walk_cached(node->s0, callback, visited);
-      break;
-    case Tag_Dup:
-    case Tag_Dup2:
-      if (node->s0 != NULL){
-        if (!has_bst(visited, node->s0)){
-          insert_bst(visited, node->s0);
-          walk_cached(node->s0, callback, visited);
-        }else{
-          remove_bst(&visited, node->s0);
-        }
-      }
-    default: break;
-  }
-}
-
-void walk_term(Node* node, void callback(Node*)){
-  BST* visited = new_bst();
-  walk_cached(node, callback, visited);
-  free_bst(visited);
-}
-
 /* SERIALIZATION */
 
-
 int _enqueue(S_Queue* queue, Node* node, int * ctr){
-  if (node == NULL){
-    return 0;
-  }
+  if (node == NULL) return 0;
 
   int n = 0;
-  
   while (1){
-    if (queue->node == node){
-      return n + 1;
-    }
+    if (queue->node == node) return n + 1;
     n ++ ;
-    if (queue->next == NULL){
-      break;
-    }
+    if (queue->next == NULL) break;
     queue = queue->next;
   }
   
@@ -356,24 +171,21 @@ int* serialize(Node* node){
   result[0] = ctr;
   ctr = 1;
 
-  if (DEBUG) printf("SERIALIZE: %d nodes\n", result[0]);
+  if (DEBUG >= 2) printf("SERIALIZE: %d nodes\n", result[0]);
 
   while (1){
-
     result[ctr] = current->node->tag;
     result[ctr + 1] = current->node->label;
     result[ctr + 2] = current->s0;
     result[ctr + 3] = current->s1;
-    if (DEBUG) printf("  [%d] tag=%s label=%d s0=%d s1=%d\n", (ctr-1)/4 + 1, tag_name(current->node->tag), current->node->label, current->s0, current->s1);
+    
+    if (DEBUG >= 2) printf("  [%d] tag=%s label=%d s0=%d s1=%d\n", (ctr-1)/4 + 1, tag_name(current->node->tag), current->node->label, current->s0, current->s1);
     ctr += 4;
     S_Queue* prev = current;
     current = current->next;
-    if (current == NULL){
-      break;
-    }
+    if (current == NULL) break;
     free(prev);
   }
-
   return result;
 }
 
@@ -389,23 +201,10 @@ Node** mk_dup(Node* target, int label){
 }
 
 Node* sup(Node* a, Node* b, int label){
-  if (a == NULL){
-    a = new_node(Tag_Null, 0, NULL, NULL);
-  }
-  if (b == NULL){
-    b = new_node(Tag_Null, 0, NULL, NULL);
-  }
+  if (a == NULL) a = new_node(Tag_Null, 0, NULL, NULL);
+  if (b == NULL) b = new_node(Tag_Null, 0, NULL, NULL);
   return new_node(Tag_Sup, label, a, b);
 }
-
-
-// void print_tag(Node* node){
-//   printf(" <> %s %d\n", tag_name(node->tag), node->label);
-// }
-
-// void print_term(Node* node){
-//   walk_term(node, print_tag);
-// }
 
 
 void check_null(void* ptr, char* tag_name){
@@ -444,11 +243,11 @@ void check_node(Node* node){
       check_null(node->s0, "Var->s0");
       break;
     case Tag_Lam:
-      check_null(node->s0, "Lam->s0");
       if (node->s1 != NULL && node->s1->tag != Tag_Var){
         printf(RED "Error : Lam %p ->s1->tag == %s %p instead of Var\n" RESET, node, tag_name(node->s1->tag), node->s1);
         exit(1);
       }
+      check_null(node->s0, "Lam->s0");
       break;
     case Tag_Sup:
     case Tag_App:
@@ -463,7 +262,14 @@ void check_node(Node* node){
 
 void erase(Node* node);
 
-void just_move(Node* src, Node* dst){
+
+
+void move(Node* src, Node* dst){
+  if (dst == NULL){
+    erase(src);
+    return;
+  }
+  if (DEBUG) printf("move %s %p -> %p\n", tag_name(src->tag), src, dst);
 
   dst->tag = src->tag;
   dst->s0 = src->s0;
@@ -471,74 +277,29 @@ void just_move(Node* src, Node* dst){
 
   dst->label = src->label;
   if (src->tag == Tag_Var){
-    if (src->s0->tag != Tag_Lam){
-      printf("Error: Invalid tag for lam in move\n");
-      exit(1);
-    }
+    if (src->s0->tag != Tag_Lam) error("Error: Invalid tag for lam in move\n");
     src->s0->s1 = dst;
   }
   if (src->tag == Tag_Lam && src->s1 != NULL){
-    if (src->s1->tag != Tag_Var){
-      printf("Error: Invalid tag for var in move\n");
-      exit(1);
-    }
+    if (src->s1->tag != Tag_Var) error("Error: Invalid tag for var in move\n");
     src->s1->s0 = dst;
   }
   if (src->tag == Tag_Dup || src->tag == Tag_Dup2){
-    if (dst->s1 != NULL){
-      dst->s1->s1 = dst;
-    }
+    if (dst->s1 != NULL)dst->s1->s1 = dst;
   }
-}
-
-
-
-void move(Node* src, Node* dst){
-
-
-  if (dst == NULL){
-    erase(src);
-    return;
-  }
-  if (DEBUG) printf("move %s %p -> %p\n", tag_name(src->tag), src, dst);
-  just_move(src,dst);
   free_node(src);
-}
-
-
-typedef struct DupStack{
-  int label;
-  int is_dup2;
-  struct DupStack* next;
-} DupStack;
-
-
-void print_stack(DupStack* stack){
-  printf("[");
-  while (stack != NULL){
-    printf("%d ", stack->label);
-    stack = stack->next;
-  }
-  printf("]\n");
 }
 
 void erase(Node* node){
   switch (node->tag){
     case Tag_App:
     case Tag_Sup: erase(node->s1);
-    case Tag_Lam:
-      erase(node->s0);
-      break;
-    case Tag_Var:
-      node->s0->s1 = NULL;
-      break;
+    case Tag_Lam: erase(node->s0); break;
+    case Tag_Var: break;
     case Tag_Dup:
     case Tag_Dup2:{
-      if (node->s1 == NULL){
-        erase(node->s0);
-      }else{
-        node->s1->s1 = NULL;
-      }
+      if (node->s1 == NULL) erase(node->s0);
+      else node->s1->s1 = NULL;
       break;
     }
     case Tag_Null: break;
@@ -549,74 +310,16 @@ void erase(Node* node){
 
 
 
-BST* taken;
-
-void own(Node* owned){
-  if (has_bst(taken, owned)){
-    printf(RED "Node %s %p is already taken\n" RESET, tag_name(owned->tag), owned);
-    exit(1);
-  }
-  insert_bst(taken, owned);
-}
-
-void _deepcheck(Node* term, BST* visited){
-  // printf("check node %s %p -> %p\n", tag_name(term->tag), term, term->s0);
-  check_node(term);
-  switch (term->tag){
-    case Tag_App:
-    case Tag_Sup:
-      own(term->s0);
-      own(term->s1);
-      _deepcheck(term->s0, visited);
-      _deepcheck(term->s1, visited);
-      break;
-    case Tag_Lam:
-      own(term->s0);
-      _deepcheck(term->s0, visited);
-      break;
-    case Tag_Dup:
-      own(term->s0);
-    case Tag_Dup2:
-      if (has_bst(visited, term->s0)){
-        return;
-      }
-      insert_bst(visited, term->s0);
-      _deepcheck(term->s0, visited);
-      break;
-    case Tag_Null:
-    case Tag_Var: break;
-    case Tag_Freed: printf(RED "Node %p is freed\n", term); exit(1);
-  };
-}
-
-
-void deepcheck(){
-  printf("deepcheck\n");
-  BST* visited = new_bst();
-  taken = new_bst();
-  _deepcheck(&runtime->nodes[0], visited);
-  free_bst(visited);
-  free_bst(taken);
-  printf("deepcheck OK\n");
-}
-
-
-
 int APP_LAM(Node* App, Node* Lam){
 
   Node* arg = App->s1;
   Node* var = Lam->s1;
   Node* body = Lam->s0;
 
-  // printf("APP_LAM app lam arg var body %p %p %p %p %p\n", App, Lam, arg, var, body);
-  
   if (var != NULL){
     move(arg, var);
     move(body, App);
-    if (Lam->s1 != NULL && Lam->s1->s0 == Lam){
-      printf("cannot free lam %p it has a var\n", Lam);
-      exit(1);
-    }
+    if (Lam->s1 != NULL && Lam->s1->s0 == Lam) {printf("cannot free lam %p it has a var\n", Lam); exit(1);}
   }else{
     move(body, App);
     erase(arg);
@@ -629,12 +332,11 @@ int APP_LAM(Node* App, Node* Lam){
 int APP_SUP(Node* App, Node* Sup){
 
   Node** dups = malloc(sizeof(Node*) * 2);
-  dups[0] = new_node(Tag_Dup, Sup->label, NULL, NULL);
-  dups[1] = new_node(Tag_Dup2, Sup->label, NULL, NULL);
-  dups[0]->s0 = App->s1;
-  dups[1]->s0 = App->s1;
+
+  dups[0] = new_node(Tag_Dup, Sup->label, App->s1, NULL);
+  dups[1] = new_node(Tag_Dup2, Sup->label, App->s1, dups[0]);
+
   dups[0]->s1 = dups[1];
-  dups[1]->s1 = dups[0];
   
   move(sup(new_node(Tag_App, 0, Sup->s0, dups[0]), new_node(Tag_App, 0, Sup->s1, dups[1]), Sup->label), App);
 
@@ -696,22 +398,12 @@ int DUP_SUP(Node* dup, Node* Sup){
   Node* db = dup->tag == Tag_Dup2 ? dup : dup->s1;
   int label = da == NULL ? db->label : da->label;
   if (Sup->label == label){
-
     if (Sup->s0 == db || Sup->s1 == db){
       move(Sup->s1, db);
       move(Sup->s0, da);
     }else{
-
-      if (da != NULL){
-        move(Sup->s0, da);
-      }else{
-        erase(Sup->s0);
-      }
-      if (db != NULL){
-        move(Sup->s1, db);
-      }else{
-        erase(Sup->s1);
-      }
+      move(Sup->s0, da);
+      move(Sup->s1, db);
     }
   } else {
     Node** dup1 = mk_dup(Sup->s0, label);
@@ -730,55 +422,27 @@ int DUP_SUP(Node* dup, Node* Sup){
 int DUP_NULL(Node* dup, Node* Null){
   Node* da = dup->tag == Tag_Dup ? dup : dup->s1;
   Node* db = dup->tag == Tag_Dup2 ? dup : dup->s1;
-  just_move(Null, da);
+  da->tag = Tag_Null;
   move(Null, db);
   return 1;
 }
 
-
-
-
-int full_redex_search = 1;
-BST* visited;
-
 int fuel = 0;
 
-
 int handle_redex(Node* term, Node* other){
-  if (fuel < runtime->steps){
-    return 0;
-  }
 
+  if (fuel <= runtime->steps) return 0;
   int (*handler)(Node*, Node*) = NULL;
-
-  switch (term->tag){
-    case Tag_App: {
-      switch (other->tag){
-        case Tag_Lam: {handler = APP_LAM; break;}
-        case Tag_Sup: {handler = APP_SUP; break;}
-        case Tag_Null: {handler = APP_NULL; break;}
-        default: break;
-      };
-      break;
-    };
-    case Tag_Dup: case Tag_Dup2:{
-      switch (other->tag){
-        case Tag_Lam: {handler = DUP_LAM; break;}
-        case Tag_Sup: {handler = DUP_SUP; break;}
-        case Tag_Null: {handler = DUP_NULL; break;}
-        default: break;
-      };
-      break;
-    }
-    default: break;
-  };
+  if (term->tag == Tag_App)
+    handler = other->tag == Tag_Lam ? APP_LAM : other->tag == Tag_Sup ? APP_SUP : other->tag == Tag_Null ? APP_NULL : NULL;
+  else if (term->tag == Tag_Dup || term->tag == Tag_Dup2){
+    handler = other->tag == Tag_Lam ? DUP_LAM : other->tag == Tag_Sup ? DUP_SUP : other->tag == Tag_Null ? DUP_NULL : NULL;
+  }
+  
   if (handler != NULL){
-
     runtime->steps ++;
-
-    if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET, runtime->steps, tag_name(term->tag), tag_name(other->tag));
+    if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET,  runtime->steps, tag_name(term->tag), tag_name(other->tag));
     handler(term, other);
-    if (DEBUG)deepcheck();
     return 1;
   }
   return 0;
@@ -786,10 +450,30 @@ int handle_redex(Node* term, Node* other){
 
 
 
-BST* searched_lams;
+int full_search = 0;
+SearchStack* redex_seen = NULL; 
+
+int stack_has(SearchStack* stack,Node* term){
+  SearchStack* current = stack;
+  while (current != NULL){
+    if (current->node == term) return 1;
+    current = current->next;
+  }
+  return 0;
+}
+
+void stack_push(SearchStack** stack, Node* term){
+
+  SearchStack* tmp = (*stack);
+  (*stack) = malloc(sizeof(SearchStack));
+  (*stack)->node = term;
+  (*stack)->next = tmp;
+}
+
 
 
 int search_redex(Node* term){
+
 
   if (term == NULL || term->s0 == NULL) return 0;
   Node* other = term->s0;
@@ -807,38 +491,32 @@ int search_redex(Node* term){
       search_redex(term->s0);
       search_redex(term->s1);
       return 0;
-    case Tag_Dup: case Tag_Dup2: case Tag_App:
+    case Tag_Dup: case Tag_Dup2:
+
       if (search_redex(other)) return search_redex(term);
       return 0;
-    case Tag_Var:
-    case Tag_Null: return 0;
+    case Tag_App:
+      if (search_redex(other)) return search_redex(term);
+      return 0;
+    
+    case Tag_Var: case Tag_Null: return 0;
     case Tag_Freed: error("Node is freed"); exit(1);
   }
 }
 
 
+
 int run(int Nsteps){
-
   fuel = Nsteps;
-
-
-  if (DEBUG) printf("RUN %d\n", Nsteps);
-  int steps = 0;
-  Node* term = &(runtime->nodes[0]);
-  full_redex_search = 0;
-  searched_lams = new_bst();
-  search_redex(term);
-  free_bst(searched_lams);
+  search_redex(&(runtime->nodes[0]));
   return runtime->steps;
-
 }
 
 
 
 
+
 void load(int* data){
-
-
 
   struct sigaction sa;
   struct sigaction old_sa;
@@ -851,14 +529,10 @@ void load(int* data){
   
   if (setjmp(segfault_jmp) != 0) {
     sigaction(SIGSEGV, &old_sa, NULL);
-    // fprintf(stderr, "SEGFAULT caught in C code\n");
     error("SEGFAULT caught in C code\n");
   }
 
-  if (runtime != NULL){
-    error("new_runtime: runtime already exists\n");
-  }
-
+  if (runtime != NULL) error("new_runtime: runtime already exists\n");
 
   runtime = malloc(sizeof(Runtime));
   runtime->empty_index = 0;
@@ -867,10 +541,6 @@ void load(int* data){
   runtime->steps = 0;
 
   int count = data[0];
-  if (count == 0) {
-    printf("deserialize: count is 0\n");
-    exit(1);
-  }
 
   if (DEBUG) printf("LOAD: %d nodes\n", count);
 
@@ -881,7 +551,7 @@ void load(int* data){
     int idx = i * 4 + 1;
     Node* node = new_node(data[idx], data[idx + 1], NULL, NULL);
     nodes[i + 1] = node;
-    if (DEBUG) printf("  created [%d] tag=%s label=%d\n", i + 1, tag_name(data[idx]), data[idx + 1]);
+    if (DEBUG >= 2) printf("  created [%d] tag=%s label=%d\n", i + 1, tag_name(data[idx]), data[idx + 1]);
   }
   
   for (int i = 0; i < count; i++) {
@@ -890,29 +560,19 @@ void load(int* data){
     int s1_idx = data[idx + 3];
     nodes[i + 1]->s0 = nodes[s0_idx];
     nodes[i + 1]->s1 = nodes[s1_idx];
-    if (DEBUG) printf("  connected [%d] s0=%d s1=%d\n", i + 1, s0_idx, s1_idx);
+    if (DEBUG >= 2) printf("  connected [%d] s0=%d s1=%d\n", i + 1, s0_idx, s1_idx);
   }
 
-  
   Node* root = nodes[1];
-  if (root != &(runtime->nodes[0])){
-    printf("deserialize: root is not the first node\n");
-  }
   free(nodes);
   
-  if (DEBUG) deepcheck();
 }
 
 int* unload(){
 
-  if (runtime == NULL){
-    printf("unload: runtime is NULL\n");
-    exit(1);
-  }
+  if (runtime == NULL) error("unload: runtime is NULL\n");
 
   Node* node = &(runtime->nodes[0]);
-
-
   int* result = serialize(node);
   free(runtime);
   runtime = NULL;

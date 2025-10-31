@@ -8,6 +8,10 @@ from example import F, T
 from main import load_term_c, run, run_term_c, unload_term_c
 from node import DEBUG, Node, Tag, app, hide_dups, lam, lamvar, move, null, parse_lam, print_tree, sup, x, dup
 
+from example import cnat
+import time
+
+
 def nat(n:int)->Node:
 
 
@@ -79,24 +83,19 @@ def eq()->Node:
   )
 
 
-from example import cnat
-import time
-
 
 def run_c_2_2():
   c = cnat(2)(cnat(2))
-  print(c)
-  res = run_term_c(c, 1)
-  print(res)
-  res = run_term_c(c, 1)
-  print(res)
-  with hide_dups(True): print(res)
+  for i in range(6):
+    c = run_term_c(c, 1)
+    print(c)
+  with hide_dups(True): print(c)
 
 
 
 def run_scott_eq_3():
   N = 300
-  c = eq()(nat(N), nat(N))
+  c = eq()(nat(N), nat(N-1))
   
   load_term_c(c)
   st = time.time_ns()
@@ -108,13 +107,19 @@ def run_scott_eq_3():
   print(r)
   with hide_dups(False): print(r)
 
+
+def try_era_var():
+  c = dup(Node(F))[0]
+  print(c)
+  c = run_term_c(c)
+  print(c)
+
 if __name__ == "__main__":  
 
-  # hide_dups.set(True)
+
+  # try_era_var()
 
   # run_c_2_2()
-  # exit()
-
 
   run_scott_eq_3()
 
@@ -131,3 +136,4 @@ if __name__ == "__main__":
   #     print(f"{t/1e9} seconds for {steps} steps, {steps/t*1e3:.3f} Mips")
   #     print(res)
   #     break
+  pass
