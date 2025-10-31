@@ -450,9 +450,6 @@ int handle_redex(Node* term, Node* other){
 
 
 
-int full_search = 0;
-SearchStack* redex_seen = NULL; 
-
 int stack_has(SearchStack* stack,Node* term){
   SearchStack* current = stack;
   while (current != NULL){
@@ -463,7 +460,6 @@ int stack_has(SearchStack* stack,Node* term){
 }
 
 void stack_push(SearchStack** stack, Node* term){
-
   SearchStack* tmp = (*stack);
   (*stack) = malloc(sizeof(SearchStack));
   (*stack)->node = term;
@@ -471,9 +467,23 @@ void stack_push(SearchStack** stack, Node* term){
 }
 
 
+void stack_free(SearchStack** stack){
+  while (*stack != NULL){
+    SearchStack* tmp = *stack;
+    *stack = (*stack)->next;
+    free(tmp);
+  }
+  *stack = NULL;
+}
+
+
+int full_search = 0;
+SearchStack* redex_seen = NULL; 
+
 
 int search_redex(Node* term){
 
+  printf("search_redex %s\n", tag_name(term->tag));
 
   if (term == NULL || term->s0 == NULL) return 0;
   Node* other = term->s0;
@@ -493,10 +503,21 @@ int search_redex(Node* term){
       return 0;
     case Tag_Dup: case Tag_Dup2:
 
+      // if (full_search){
+      //   if (stack_has(redex_seen, term->s0)) {
+      //     printf("stack_has %p\n", term->s0);
+      //     return 0;
+      //   }
+      //   stack_push(&redex_seen, term->s0);
+      // }
       if (search_redex(other)) return search_redex(term);
+
       return 0;
     case Tag_App:
       if (search_redex(other)) return search_redex(term);
+      // if (full_search){
+      //   search_redex(term->s1);
+      // }
       return 0;
     
     case Tag_Var: case Tag_Null: return 0;
@@ -563,7 +584,6 @@ void load(int* data){
     if (DEBUG >= 2) printf("  connected [%d] s0=%d s1=%d\n", i + 1, s0_idx, s1_idx);
   }
 
-  Node* root = nodes[1];
   free(nodes);
   
 }
@@ -572,8 +592,7 @@ int* unload(){
 
   if (runtime == NULL) error("unload: runtime is NULL\n");
 
-  Node* node = &(runtime->nodes[0]);
-  int* result = serialize(node);
+  int* result = serialize(&(runtime->nodes[0]));
   free(runtime);
   runtime = NULL;
   return result;
