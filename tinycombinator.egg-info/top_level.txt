@@ -1,2 +1,4 @@
-src
+examples
 test
+tinycombinator
+tmp

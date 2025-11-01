@@ -3,14 +3,12 @@ Scott encoding for natural numbers and functions on them
 """
 
 from operator import truediv
-from typing_extensions import runtime
-from .example import F, T
-from .main import load_term_c, run, run_term_c, unload_term_c
-from .helpers import DEBUG
-from .node import  Node, Tag, app, hide_dups, lam, lamvar, move, null, parse_lam, print_tree, sup, x, dup
+from tinycombinator.terms import F, T, cnat
+from tinycombinator.main import load_term_c, run, run_term_c, unload_term_c
+from tinycombinator.helpers import DEBUG
+from tinycombinator.node import  Node, Tag, app, hide_dups, lam, lamvar, move, null, parse_lam, print_tree, sup, x, dup
 
 
-from .example import cnat
 import time
 
 

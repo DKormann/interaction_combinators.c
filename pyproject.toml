@@ -36,7 +36,6 @@ test = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["src*", "test*"]
 
 [tool.pytest.ini_options]
 testpaths = ["test"]

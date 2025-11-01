@@ -2,7 +2,12 @@
 
 # tinycombinator
 
-A minimal Python and C implementation of interaction calculus runtime.
+
+![graph](graph.png)
+
+
+minimal python library to run interaction calculus
+
 
 ## IC runtime
 
@@ -32,78 +37,6 @@ var <-> lam connection:
 
 implementing python runtime is quite 
 
-## Thread Safety & Concurrent Testing
-
-The C runtime has been refactored to support concurrent testing via pytest-xdist and similar parallel test frameworks. Key changes:
-
-### C Code (`main.c`)
-- **Removed global `runtime` variable**: All functions now accept `Runtime* runtime` as a parameter
-- **New functions**:
-  - `Runtime* new_runtime()`: Creates a new isolated runtime instance
-  - `void free_runtime(Runtime* runtime)`: Cleans up a runtime instance
-- **Updated function signatures**: All functions that use runtime now take it as a parameter:
-  - `new_node(Runtime* runtime, Tag tag, int label)`
-  - `free_node(Runtime* runtime, Node* node)`
-  - `dup()`, `sup()`, `app()` - all take runtime parameter
-  - `erase()`, `move()`, `just_move()` - pass runtime through
-  - `step()`, `run()`, `load()`, `unload()` - accept runtime instance
-
-### Python Interface (`main.py`)
-- **Thread-local storage**: Uses `threading.local()` to store per-thread C library instances
-- **`get_lib()` function**: Returns thread-specific CDLL instance
-- **Updated C bindings**:
-  - `lib.new_runtime()`: Creates runtime instance
-  - `lib.free_runtime(runtime)`: Destroys runtime instance
-  - All C functions updated to accept runtime pointer parameter
-- **Thread-safe workflow**:
-  1. Each thread gets its own C library instance via `get_lib()`
-  2. Each test creates its own isolated runtime with `new_runtime()`
-  3. Tests can run concurrently without shared state conflicts
-
-### Usage
-Tests can now run in parallel without conflicts:
-```bash
-pytest tests.py -n auto  # Run with pytest-xdist
-```
-
-Each test will have its own isolated runtime instance, so there are no shared state conflicts!
-
-## Debugging: "App node has NULL s1"
-
-If you encounter an error "ERROR: App node has NULL s1 (argument)", this means an `App` (application) node was created without both a function and an argument. This should never happen in valid terms.
-
-### Causes and Solutions:
-
-1. **Invalid Python term construction** (Most likely):
-   - Problem: Manually creating an App node without setting s1
-   ```python
-   bad_app = Node(None)
-   bad_app.tag = Tag.App
-   bad_app.s0 = some_function
-   bad_app.s1 = None  # ❌ INVALID
-   ```
-   - Solution: Always use the `app()` helper function or ensure both s0 and s1 are set
-   ```python
-   from node import app
-   good_app = app(function, argument)  # ✓ CORRECT
-   ```
-
-2. **Incorrect term transformation**:
-   - Ensure your Python code creates complete App nodes
-   - Use the API functions: `app(f, x)`, `lam(body, var)`, etc.
-
-3. **Enable debug output to trace the issue**:
-   ```python
-   from helpers import DEBUG
-   DEBUG.set(True)  # Shows LOAD and SERIALIZE details
-   
-   result = run_term_c(your_term)  # Will print detailed info
-   ```
-
-4. **Check the serialization output**:
-   - With `DEBUG.set(True)`, look for lines like `[N] tag=App ... s1=0`
-   - If `s1=0`, it means the argument pointer is NULL
-
 ## TODO:
 
  - [x] python runtime
@@ -113,8 +46,8 @@ If you encounter an error "ERROR: App node has NULL s1 (argument)", this means a
     - [x] circular DUP_SUP
     - [x] full reduction (find all possible terms in final form)
     - [ ] garbage collection
-      - [ ] correctly collect dup targets
     - [ ] parallel
+ - [ ] Type theory
  - [ ] type system based on ICC
 
 

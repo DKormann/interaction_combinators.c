@@ -1,12 +1,12 @@
 from math import exp
 import unittest
 
-from src.example import circular, cnat
+from tinycombinator.terms import circular, cnat
 
-import src.scott as scott  
-from src.main import get_lib, get_node_count_c, load_term_c, run_term_c
-from src.node import Node, reset_labels
-from src.helpers import DEBUG, hide_dups, print_tree
+from tinycombinator import scott
+from tinycombinator.main import get_lib, get_node_count_c, load_term_c, run_term_c
+from tinycombinator.node import Node, reset_labels
+from tinycombinator.helpers import DEBUG, hide_dups, print_tree
 
 
 hide_dups.set(True)

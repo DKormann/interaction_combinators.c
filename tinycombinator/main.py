@@ -1,10 +1,11 @@
-from base64 import decodebytes
-from itertools import count
+
 import subprocess, ctypes, os, hashlib, threading
 import time
-from .example import cnat
-from .node import Node, Tag
-from .helpers import DEBUG, TIMEIT, hide_dups, print_tree
+from typing import Callable
+
+from tinycombinator.run import reduce
+from tinycombinator.node import Node, Tag
+from tinycombinator.helpers import BACKEND, DEBUG, TIMEIT, hide_dups, print_tree
 
 
 
@@ -69,8 +70,12 @@ def from_c_data(res:ctypes.POINTER(ctypes.c_int))->Node:
   return nodes[1]
 
 
-so_path = os.path.join("./.tmp", "main.so")
-c_cache_path = os.path.join("./.tmp", "c_hash")
+tmp_path = os.path.join( os.path.dirname(__file__), "../.tmp")
+
+os.makedirs(tmp_path, exist_ok=True)
+
+so_path = os.path.join(tmp_path, "main.so")
+c_cache_path = os.path.join(tmp_path, "c_hash")
 main_path = os.path.join(os.path.dirname(__file__), "main.c")
 
 
@@ -79,7 +84,7 @@ with open(main_path, "rb") as f: c_hash = hashlib.md5(f.read()).hexdigest()
 def compile_c():
   with open(c_cache_path, "w") as f: f.write(c_hash)
   print("Compiling...")
-  os.makedirs("./.tmp", exist_ok=True)
+  os.makedirs(tmp_path, exist_ok=True)
   subprocess.check_call(["clang", "-shared", "-O2", "-fPIC", main_path, "-o", so_path])
 
 if not os.path.exists(c_cache_path): compile_c()
@@ -139,3 +144,12 @@ def run_term_c(term:Node, maxsteps: int = DEFAULT_FUEL, runs = DEFAULT_FUEL) -> 
     with hide_dups(True): print(term)
   return term
 
+
+
+# def execute(term:Node, maxsteps: int = DEFAULT_FUEL, runs = DEFAULT_FUEL) -> Node:
+#   if BACKEND == "c": return 
+
+@property
+def execute(node:Node, *args, **kwargs)->Callable[[Node, int, int], Node]:
+  if BACKEND == "c": return run_term_c(node, *args, **kwargs)
+  return reduce(node)

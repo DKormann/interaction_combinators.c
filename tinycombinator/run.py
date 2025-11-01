@@ -1,7 +1,7 @@
 
 
-from node import Node, lam, x, app, sup, dup, var, null, Tag, tree, move
-from helpers import DEBUG
+from tinycombinator.node import Node, lam, x, app, sup, dup, var, null, Tag, tree, move
+from tinycombinator.helpers import DEBUG
 
 
 #%%
