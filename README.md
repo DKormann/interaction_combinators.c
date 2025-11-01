@@ -5,8 +5,15 @@
 
 ![graph](graph.png)
 
-
 minimal python library to run interaction calculus
+
+this project believes two things:
+- interaction combinators are powerful way to see computation
+- simplicity is a virtue
+
+corrolary:
+- code size should be minimized
+- searching for minimal terms provides generality
 
 
 ## IC runtime

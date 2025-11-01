@@ -351,46 +351,17 @@ int fuel = 0;
 int handle_redex(Node* term, Node* other, Runtime* runtime){
 
   if (fuel <= runtime->steps) return 0;
-  
-  if (term->tag == Tag_App){
-    if (other->tag == Tag_Lam) {
-      runtime->steps ++;
-      if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET, runtime->steps, tag_name(term->tag), tag_name(other->tag));
-      return APP_LAM(term, other, runtime);
-    }
-    else if (other->tag == Tag_Sup) {
-      runtime->steps ++;
-      if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET, runtime->steps, tag_name(term->tag), tag_name(other->tag));
-      return APP_SUP(term, other, runtime);
-    }
-    else if (other->tag == Tag_Null) {
-      runtime->steps ++;
-      if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET, runtime->steps, tag_name(term->tag), tag_name(other->tag));
-      return APP_NULL(term, other, runtime);
-    }
+
+  int (*handler)(Node*, Node*, Runtime*) = NULL;
+  if (term->tag == Tag_App) handler = other->tag == Tag_Lam ? APP_LAM : other->tag == Tag_Sup ? APP_SUP : other->tag == Tag_Null ? APP_NULL : NULL;
+  else if (term->tag == Tag_Dup || term->tag == Tag_Dup2) handler = other->tag == Tag_Lam ? DUP_LAM : other->tag == Tag_Sup ? DUP_SUP : other->tag == Tag_Null ? DUP_NULL : NULL;
+  if (handler != NULL){
+    runtime->steps ++;
+    if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET, runtime->steps, tag_name(term->tag), tag_name(other->tag));
+    return handler(term, other, runtime);
   }
-  else if (term->tag == Tag_Dup || term->tag == Tag_Dup2){
-    if (other->tag == Tag_Lam) {
-      runtime->steps ++;
-      if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET, runtime->steps, tag_name(term->tag), tag_name(other->tag));
-      return DUP_LAM(term, other, runtime);
-    }
-    else if (other->tag == Tag_Sup) {
-      runtime->steps ++;
-      if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET, runtime->steps, tag_name(term->tag), tag_name(other->tag));
-      return DUP_SUP(term, other, runtime);
-    }
-    else if (other->tag == Tag_Null) {
-      runtime->steps ++;
-      if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET, runtime->steps, tag_name(term->tag), tag_name(other->tag));
-      return DUP_NULL(term, other, runtime);
-    }
-  }
-  
   return 0;
 }
-
-
 
 int stack_has(SearchStack* stack,Node* term){
   SearchStack* current = stack;
@@ -483,12 +454,9 @@ int run(int Nsteps, Runtime* runtime){
   return runtime->steps;
 }
 
-
-
 int get_node_count(Runtime* runtime){
   return runtime->node_ctr;
 }
-
 
 Runtime* load(int* data, Runtime* runtime){
 
@@ -533,8 +501,6 @@ Runtime* load(int* data, Runtime* runtime){
   free(nodes);
   return runtime;
 }
-
-
 
 
 int* unload(Runtime* runtime){

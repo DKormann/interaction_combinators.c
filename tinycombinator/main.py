@@ -130,6 +130,7 @@ def run_term_c(term:Node, maxsteps: int = DEFAULT_FUEL, runs = DEFAULT_FUEL) -> 
 
   if DEBUG: print(term)
   for batch in range(runs):
+
     runtime = load_term_c(term)
     st = time.time_ns()
     steps = run(runtime, int(maxsteps))
@@ -137,19 +138,15 @@ def run_term_c(term:Node, maxsteps: int = DEFAULT_FUEL, runs = DEFAULT_FUEL) -> 
     term = unload_term_c(runtime)
     if DEBUG: print(term)
     if steps < maxsteps: break
-  if TIMEIT and t > 0:
+  if TIMEIT:
     total_steps = batch * maxsteps + steps
-    print(f"\nFinal result {total_steps} steps: {t/1e9} seconds {(total_steps)/(t/1e3):.3f} Mips")
+    print(f"\n{total_steps} steps: {t/1e9} seconds {(total_steps)/(t+1e-9)*1e3:.3f} Mips")
   if DEBUG:
+    print(f"Final result:")
     with hide_dups(True): print(term)
   return term
 
 
-
-# def execute(term:Node, maxsteps: int = DEFAULT_FUEL, runs = DEFAULT_FUEL) -> Node:
-#   if BACKEND == "c": return 
-
-@property
 def execute(node:Node, *args, **kwargs)->Callable[[Node, int, int], Node]:
   if BACKEND == "c": return run_term_c(node, *args, **kwargs)
   return reduce(node)

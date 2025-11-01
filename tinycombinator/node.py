@@ -14,7 +14,6 @@ class Tag(Enum):
   Null = auto()
   Var = auto()
   Freed = auto()
-
   Prim = auto()
 
   intermediate_var = auto()
