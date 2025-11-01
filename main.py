@@ -17,8 +17,7 @@ def to_c_data(node: Node) -> list[int]:
     taken[owned] = owner
   
   def visit(n: Node):
-    if n is None or n in ctx:
-      return
+    if n is None or n in ctx: return
     ctx[n] = len(nodes) + 1  # 1-indexed, 0 is NULL
     nodes.append(n)
     visit(n.s0)
@@ -34,29 +33,12 @@ def to_c_data(node: Node) -> list[int]:
   visit(node)
 
   for i, n in enumerate(nodes):
-    if n.tag == Tag.App:
-      if n.s1 is None:
+    if n.tag == Tag.App and n.s1 is None:
         raise ValueError(f"Invalid App at index {i}: s1 (argument) is None. App must have both function (s0) and argument (s1). s0={n.s0}")
-  
-  # Tag enum mapping to match C enum order
-  tag_map = {
-    Tag.App: 0,
-    Tag.Lam: 1, 
-    Tag.Sup: 2,
-    Tag.Dup: 3,
-    Tag.Dup2: 4,
-    Tag.Null: 5,
-    Tag.Var: 6,
-    Tag.Freed: 7,
-  }
-  
+    
   data = [len(nodes)]
   for i, n in enumerate(nodes):
-    tag_int = tag_map.get(n.tag, 0)
-    s0_idx = ctx.get(n.s0, 0)
-    s1_idx = ctx.get(n.s1, 0)
-
-    data.extend([tag_int, n.label or 0, s0_idx, s1_idx])
+    data.extend([n.tag.value-1, n.label or 0, ctx.get(n.s0, 0), ctx.get(n.s1, 0)])
   
   return data
 
@@ -106,36 +88,45 @@ else:
 
 _local = threading.local()
 
+
+
+
 def get_lib():
   if not hasattr(_local, 'lib'):
     _local.lib = ctypes.CDLL(so_path)
-    _local.lib.load.argtypes = [ctypes.POINTER(ctypes.c_int)]
-
-    _local.lib.unload.argtypes = []
-    _local.lib.unload.restype = ctypes.POINTER(ctypes.c_int)
-    _local.lib.set_debug.argtypes = [ctypes.c_int]
-    _local.lib.run.argtypes = [ctypes.c_int]
-    _local.lib.run.restype = ctypes.c_int
+    def go(name, inp, out):
+      getattr(_local.lib, name).argtypes = inp
+      getattr(_local.lib, name).restype = out
+    go("get_node_count", [ctypes.c_void_p], ctypes.c_int)
+    go("load", [ctypes.POINTER(ctypes.c_int)], ctypes.c_void_p)
+    go("unload", [ctypes.c_void_p], ctypes.POINTER(ctypes.c_int))
+    go("set_debug", [ctypes.c_int], None)
+    go("run", [ctypes.c_int, ctypes.c_void_p], ctypes.c_int)
     _local.lib.set_debug(DEBUG.get())
+
   return _local.lib
 
-def load_term_c(term: Node) -> None:
-  lib = get_lib()
+def load_term_c(term: Node) -> ctypes.c_void_p: return get_lib().load((ctypes.c_int * len(to_c_data(term)))(*to_c_data(term)))
 
-  lib.load((ctypes.c_int * len(to_c_data(term)))(*to_c_data(term)))
-
-def unload_term_c() -> Node:
-  lib = get_lib()
-  res = from_c_data(lib.unload())
-  return res
-
+def unload_term_c(runtime) -> Node: return from_c_data(get_lib().unload(runtime))
 
 DEFAULT_FUEL = 1<<30
 
-def run(steps:int = DEFAULT_FUEL): return get_lib().run(steps)
+def run(runtime, steps:int = DEFAULT_FUEL):
+  return get_lib().run(steps, runtime)
 
-def run_term_c(term:Node, steps: int = DEFAULT_FUEL) -> Node:
-  load_term_c(term)
-  steps = run(int(steps))
-  res = unload_term_c()
-  return res
+def get_node_count_c() -> int: return get_lib().get_node_count()
+
+def run_term_c(term:Node, maxsteps: int = DEFAULT_FUEL, runs = DEFAULT_FUEL) -> Node:
+  if DEBUG: print(term)
+  for batch in range(runs):
+    runtime = load_term_c(term)
+    steps = run(runtime, int(maxsteps))
+    term = unload_term_c(runtime)
+    if DEBUG: print(term)
+    if steps < maxsteps: break
+  if DEBUG:
+    print(f"\nFinal result { batch * maxsteps + steps} steps:")
+    with hide_dups(True): print(term)
+  return term
+

@@ -86,18 +86,7 @@ def eq()->Node:
 
 def run_c_2_2():
   c = cnat(2)(cnat(2))
-  print(c)
-  for i in range(10):
-
-    load_term_c(c)
-    steps = run(20)
-    if not steps: break
-    c = unload_term_c()
-    print(c)
-
-  with hide_dups(True): print(c)
-
-
+  run_term_c(c, 20, 20)
 
 def run_scott_eq_3():
   N = 300
@@ -123,25 +112,9 @@ def try_era_var():
 if __name__ == "__main__":  
 
 
-  # try_era_var()
+  # run_scott_eq_3()
 
-  # run_c_2_2()
-
-  run_scott_eq_3()
+  run_c_2_2()
 
 
-
-
-  # st = time.time_ns()
-
-  # B = 100000
-  # for i in range(100):
-  #   print(i)
-  #   steps = run(B)
-  #   if steps > -1:
-  #     res = unload_term_c()
-  #     t = time.time_ns() - st
-  #     print(f"{t/1e9} seconds for {steps} steps, {steps/t*1e3:.3f} Mips")
-  #     print(res)
-  #     break
   pass

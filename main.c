@@ -16,10 +16,7 @@ void segfault_handler(int sig) {
 }
 
 int DEBUG = 1;
-
-void set_debug(int debug){
-  DEBUG = debug;
-}
+void set_debug(int debug){ DEBUG = debug; }
 
 #define RED     "\x1b[31m"
 #define GREEN   "\x1b[32m"
@@ -28,9 +25,7 @@ void set_debug(int debug){
 #define RESET   "\x1b[0m"
 
 void debug(char* content){
-  if (DEBUG){
-    printf(YELLOW "DEBUG: %s" RESET, content);
-  }
+  if (DEBUG) printf(YELLOW "DEBUG: %s" RESET, content);
 }
 
 void error(char* content){
@@ -38,23 +33,9 @@ void error(char* content){
   exit(1);
 }
 
-typedef enum Tag{
-  Tag_App,
-  Tag_Lam,
-  Tag_Sup,
-  Tag_Dup,
-  Tag_Dup2,
-  Tag_Null,
-  Tag_Var,
-  Tag_Freed,
-}Tag;
+typedef enum Tag{ Tag_App, Tag_Lam, Tag_Sup, Tag_Dup, Tag_Dup2, Tag_Null, Tag_Var, Tag_Freed }Tag;
 
-typedef struct Node{
-  Tag tag;
-  int label;
-  struct Node* s0;
-  struct Node* s1;
-}Node;
+typedef struct Node{ Tag tag; int label; struct Node* s0; struct Node* s1; }Node;
 
 #define MAX_NODES 1<<20
 
@@ -66,7 +47,6 @@ typedef struct Runtime{
   int steps;
 } Runtime;
 
-Runtime* runtime;
 
 char* tag_names[8] = { "App", "Lam", "Sup", "Dup", "Dup2", "Null", "Var", "Freed" };
 
@@ -75,19 +55,15 @@ char * tag_name(int tag){
 }
 
 
-void check_node(Node* node);
 
-Node* new_node(Tag tag, int label, Node* s0, Node* s1){
+Node* new_node(Tag tag, int label, Node* s0, Node* s1, Runtime* runtime){
   Node* node = NULL;
   if (runtime->free_list != NULL){
     node = runtime->free_list;
     runtime->free_list = node->s0;
   }else{
     node = &runtime->nodes[runtime-> empty_index ++ ];
-    if (runtime->empty_index >= MAX_NODES){
-      error("Error: MAX_NODES reached\n");
-    }
-    runtime->node_ctr ++;
+    if (runtime->empty_index >= MAX_NODES) error("Error: MAX_NODES reached\n");
   }
   runtime->node_ctr ++;
   node->tag = tag;
@@ -100,7 +76,7 @@ Node* new_node(Tag tag, int label, Node* s0, Node* s1){
 
 
 
-void free_node(Node* node){
+void free_node(Node* node, Runtime* runtime){
   if (DEBUG && node->tag == Tag_Freed){
     printf("Error: Node %p is already freed\n", node);
     exit(1);
@@ -115,21 +91,12 @@ void free_node(Node* node){
   runtime->free_list = node;
 }
 
-typedef struct SQueue{
-  Node* node;
-  int s0;
-  int s1;
-  struct SQueue* next;
-} S_Queue;
-
-typedef struct SearchStack{
-  Node* node;
-  struct SearchStack* next;
-} SearchStack;
+typedef struct SQueue{ Node* node; int s0; int s1; struct SQueue* next; } SQueue;
+typedef struct SearchStack{ Node* node; struct SearchStack* next;} SearchStack;
 
 /* SERIALIZATION */
 
-int _enqueue(S_Queue* queue, Node* node, int * ctr){
+int _enqueue(SQueue* queue, Node* node, int * ctr){
   if (node == NULL) return 0;
 
   int n = 0;
@@ -140,9 +107,8 @@ int _enqueue(S_Queue* queue, Node* node, int * ctr){
     queue = queue->next;
   }
   
-  S_Queue* new_node = malloc(sizeof(S_Queue));
+  SQueue* new_node = calloc(1, sizeof(SQueue));
   new_node->node = node;
-  new_node->next = NULL;
   queue->next = new_node;
   (*ctr)++;
 
@@ -152,10 +118,10 @@ int _enqueue(S_Queue* queue, Node* node, int * ctr){
 
 int* serialize(Node* node){
 
-  S_Queue* queue = malloc(sizeof(S_Queue));
+  SQueue* queue = malloc(sizeof(SQueue));
   queue->node = node;
   queue->next = NULL;
-  S_Queue* current = queue;
+  SQueue* current = queue;
   int ctr = 1;
 
   while (current != NULL){
@@ -181,7 +147,7 @@ int* serialize(Node* node){
     
     if (DEBUG >= 2) printf("  [%d] tag=%s label=%d s0=%d s1=%d\n", (ctr-1)/4 + 1, tag_name(current->node->tag), current->node->label, current->s0, current->s1);
     ctr += 4;
-    S_Queue* prev = current;
+    SQueue* prev = current;
     current = current->next;
     if (current == NULL) break;
     free(prev);
@@ -189,9 +155,9 @@ int* serialize(Node* node){
   return result;
 }
 
-Node** mk_dup(Node* target, int label){
-  Node* dup1 = new_node(Tag_Dup, label, target, NULL);
-  Node* dup2 = new_node(Tag_Dup2, label, target, dup1);
+Node** mk_dup(Node* target, int label, Runtime* runtime){
+  Node* dup1 = new_node(Tag_Dup, label, target, NULL, runtime);
+  Node* dup2 = new_node(Tag_Dup2, label, target, dup1, runtime);
   dup1->s1 = dup2;
 
   Node**res = malloc(sizeof(Node*) * 2);
@@ -200,10 +166,10 @@ Node** mk_dup(Node* target, int label){
   return res;
 }
 
-Node* sup(Node* a, Node* b, int label){
-  if (a == NULL) a = new_node(Tag_Null, 0, NULL, NULL);
-  if (b == NULL) b = new_node(Tag_Null, 0, NULL, NULL);
-  return new_node(Tag_Sup, label, a, b);
+Node* sup(Node* a, Node* b, int label, Runtime* runtime){
+  if (a == NULL) a = new_node(Tag_Null, 0, NULL, NULL, runtime);
+  if (b == NULL) b = new_node(Tag_Null, 0, NULL, NULL, runtime);
+  return new_node(Tag_Sup, label, a, b, runtime);
 }
 
 
@@ -215,58 +181,14 @@ void check_null(void* ptr, char* tag_name){
 }
 
 
-void check_node(Node* node){
-  if (node == NULL){
-    printf("Error: node is NULL\n");
-    exit(1);
-  }
-  switch (node->tag){
-    case Tag_Dup:
-      if (node->s1 != NULL && node->s1->tag != Tag_Dup2){
-        printf("Error: Dup->s0->tag == %s instead of Dup\n", tag_name(node->s0->tag));
-        exit(1);
-      }
-      check_null(node->s0, "Dup->s0");
-      break;
-    case Tag_Dup2:
-      if (node->s1 != NULL && node->s1->tag != Tag_Dup){
-        printf("Error: Dup2->s0->tag == %s instead of Dup\n", tag_name(node->s0->tag));
-        exit(1);
-      }
-      check_null(node->s0, "Dup->s0");
-      break;
-    case Tag_Var:
-      if (node->s0->tag != Tag_Lam){
-        printf("Error: Var->s0->tag %p == %s %p instead of Lam\n",node, tag_name(node->s0->tag), node->s0);
-        exit(1);
-      }
-      check_null(node->s0, "Var->s0");
-      break;
-    case Tag_Lam:
-      if (node->s1 != NULL && node->s1->tag != Tag_Var){
-        printf(RED "Error : Lam %p ->s1->tag == %s %p instead of Var\n" RESET, node, tag_name(node->s1->tag), node->s1);
-        exit(1);
-      }
-      check_null(node->s0, "Lam->s0");
-      break;
-    case Tag_Sup:
-    case Tag_App:
-      check_null(node->s0, "App->s0");
-      check_null(node->s1, "App->s1");
-      break;
-    case Tag_Null:break;
-    case Tag_Freed: printf(RED "Node %p is freed\n" RESET, node); exit(1);
-  }
-}
 
-
-void erase(Node* node);
+void erase(Node* node, Runtime* runtime);
 
 
 
-void move(Node* src, Node* dst){
+void move(Node* src, Node* dst, Runtime* runtime){
   if (dst == NULL){
-    erase(src);
+    erase(src, runtime);
     return;
   }
   if (DEBUG) printf("move %s %p -> %p\n", tag_name(src->tag), src, dst);
@@ -287,81 +209,78 @@ void move(Node* src, Node* dst){
   if (src->tag == Tag_Dup || src->tag == Tag_Dup2){
     if (dst->s1 != NULL)dst->s1->s1 = dst;
   }
-  free_node(src);
+  free_node(src, runtime);
 }
 
-void erase(Node* node){
+void erase(Node* node, Runtime* runtime){
   switch (node->tag){
     case Tag_App:
-    case Tag_Sup: erase(node->s1);
-    case Tag_Lam: erase(node->s0); break;
+    case Tag_Sup: erase(node->s1, runtime);
+    case Tag_Lam: erase(node->s0, runtime); break;
     case Tag_Var: break;
     case Tag_Dup:
     case Tag_Dup2:{
-      if (node->s1 == NULL) erase(node->s0);
+      if (node->s1 == NULL) erase(node->s0, runtime);
       else node->s1->s1 = NULL;
       break;
     }
     case Tag_Null: break;
     case Tag_Freed: error("Node is freed");
   };
-  free_node(node);
+  free_node(node, runtime);
 }
 
 
 
-int APP_LAM(Node* App, Node* Lam){
+int APP_LAM(Node* App, Node* Lam, Runtime* runtime){
 
   Node* arg = App->s1;
   Node* var = Lam->s1;
   Node* body = Lam->s0;
 
   if (var != NULL){
-    move(arg, var);
-    move(body, App);
+    move(arg, var, runtime);
+    move(body, App, runtime);
     if (Lam->s1 != NULL && Lam->s1->s0 == Lam) {printf("cannot free lam %p it has a var\n", Lam); exit(1);}
   }else{
-    move(body, App);
-    erase(arg);
+    move(body, App, runtime);
+    erase(arg, runtime);
   }
 
-  free_node(Lam);
+  free_node(Lam, runtime);
   return 1;
 }
 
-int APP_SUP(Node* App, Node* Sup){
+int APP_SUP(Node* App, Node* Sup, Runtime* runtime){
 
   Node** dups = malloc(sizeof(Node*) * 2);
 
-  dups[0] = new_node(Tag_Dup, Sup->label, App->s1, NULL);
-  dups[1] = new_node(Tag_Dup2, Sup->label, App->s1, dups[0]);
-
+  dups[0] = new_node(Tag_Dup, Sup->label, App->s1, NULL, runtime);
+  dups[1] = new_node(Tag_Dup2, Sup->label, App->s1, dups[0], runtime);
   dups[0]->s1 = dups[1];
   
-  move(sup(new_node(Tag_App, 0, Sup->s0, dups[0]), new_node(Tag_App, 0, Sup->s1, dups[1]), Sup->label), App);
-
+  move(sup(new_node(Tag_App, 0, Sup->s0, dups[0], runtime), new_node(Tag_App, 0, Sup->s1, dups[1], runtime), Sup->label, runtime), App, runtime);
   free(dups);
-
   return 1;
 }
 
 
-int APP_NULL(Node* App, Node* Null){
-  erase(App->s1);
-  move(Null, App);
+int APP_NULL(Node* App, Node* Null, Runtime* runtime){
+  erase(App->s1, runtime);
+  move(Null, App, runtime);
   return 1;
 }
 
 
 
-int DUP_LAM(Node* dup, Node* Lam){
+int DUP_LAM(Node* dup, Node* Lam, Runtime* runtime){
   Node* da = dup->tag == Tag_Dup ? dup : dup->s1;
   Node* db = dup->tag == Tag_Dup2 ? dup : dup->s1;
 
   if (DEBUG) printf("da:%p db:%p lam:%p var:%p\n",  da, db, Lam, Lam->s1);
 
   int label = da == NULL ? db->label : da->label;
-  Node** dbody = mk_dup(Lam->s0, label);
+  Node** dbody = mk_dup(Lam->s0, label, runtime);
 
   Node* vara = NULL;
   Node* varb = NULL;
@@ -369,82 +288,105 @@ int DUP_LAM(Node* dup, Node* Lam){
   Node* funb = NULL;
 
   if (da != NULL){
-    funa = new_node(Tag_Lam,0, NULL, NULL);
-    vara = new_node(Tag_Var, 0, NULL, NULL);
+    funa = new_node(Tag_Lam,0, NULL, NULL, runtime);
+    vara = new_node(Tag_Var, 0, NULL, NULL, runtime);
     funa->s0 = dbody[0];
     vara->s0 = funa;
     funa->s1 = vara;
-    move(funa, da);
+    move(funa, da, runtime);
   }
 
   if (db != NULL){
-    funb = new_node(Tag_Lam,0, NULL, NULL);
-    varb = new_node(Tag_Var, 0, NULL, NULL);
+    funb = new_node(Tag_Lam,0, NULL, NULL, runtime);
+    varb = new_node(Tag_Var, 0, NULL, NULL, runtime);
     funb->s0 = dbody[1];
     varb->s0 = funb;
     funb->s1 = varb;
-    move(funb, db);
+    move(funb, db, runtime);
   }
 
   if (Lam->s1 != NULL){
-    move(sup(vara, varb, label), Lam->s1);
+    move(sup(vara, varb, label, runtime), Lam->s1, runtime);
   }
   return 1;
 }
 
-int DUP_SUP(Node* dup, Node* Sup){
+int DUP_SUP(Node* dup, Node* Sup, Runtime* runtime){
 
   Node* da = dup->tag == Tag_Dup ? dup : dup->s1;
   Node* db = dup->tag == Tag_Dup2 ? dup : dup->s1;
   int label = da == NULL ? db->label : da->label;
   if (Sup->label == label){
     if (Sup->s0 == db || Sup->s1 == db){
-      move(Sup->s1, db);
-      move(Sup->s0, da);
+      move(Sup->s1, db, runtime);
+      move(Sup->s0, da, runtime);
     }else{
-      move(Sup->s0, da);
-      move(Sup->s1, db);
+      move(Sup->s0, da, runtime);
+      move(Sup->s1, db, runtime);
     }
   } else {
-    Node** dup1 = mk_dup(Sup->s0, label);
-    Node** dup2 = mk_dup(Sup->s1, label);
-    move(sup(dup1[0], dup2[0], Sup->label), da);
-    move(sup(dup1[1], dup2[1], Sup->label), db);
+    Node** dup1 = mk_dup(Sup->s0, label, runtime);
+    Node** dup2 = mk_dup(Sup->s1, label, runtime);
+    move(sup(dup1[0], dup2[0], Sup->label, runtime), da, runtime);
+    move(sup(dup1[1], dup2[1], Sup->label, runtime), db, runtime);
     free(dup1);
     free(dup2);
   }
 
-  free_node(Sup);
+  free_node(Sup, runtime);
   return 1;
 }
 
 
-int DUP_NULL(Node* dup, Node* Null){
+int DUP_NULL(Node* dup, Node* Null, Runtime* runtime){
   Node* da = dup->tag == Tag_Dup ? dup : dup->s1;
   Node* db = dup->tag == Tag_Dup2 ? dup : dup->s1;
   da->tag = Tag_Null;
-  move(Null, db);
+  move(Null, db, runtime);
   return 1;
 }
 
 int fuel = 0;
 
-int handle_redex(Node* term, Node* other){
+int handle_redex(Node* term, Node* other, Runtime* runtime){
 
   if (fuel <= runtime->steps) return 0;
-  int (*handler)(Node*, Node*) = NULL;
-  if (term->tag == Tag_App)
-    handler = other->tag == Tag_Lam ? APP_LAM : other->tag == Tag_Sup ? APP_SUP : other->tag == Tag_Null ? APP_NULL : NULL;
+  
+  if (term->tag == Tag_App){
+    if (other->tag == Tag_Lam) {
+      runtime->steps ++;
+      if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET, runtime->steps, tag_name(term->tag), tag_name(other->tag));
+      return APP_LAM(term, other, runtime);
+    }
+    else if (other->tag == Tag_Sup) {
+      runtime->steps ++;
+      if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET, runtime->steps, tag_name(term->tag), tag_name(other->tag));
+      return APP_SUP(term, other, runtime);
+    }
+    else if (other->tag == Tag_Null) {
+      runtime->steps ++;
+      if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET, runtime->steps, tag_name(term->tag), tag_name(other->tag));
+      return APP_NULL(term, other, runtime);
+    }
+  }
   else if (term->tag == Tag_Dup || term->tag == Tag_Dup2){
-    handler = other->tag == Tag_Lam ? DUP_LAM : other->tag == Tag_Sup ? DUP_SUP : other->tag == Tag_Null ? DUP_NULL : NULL;
+    if (other->tag == Tag_Lam) {
+      runtime->steps ++;
+      if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET, runtime->steps, tag_name(term->tag), tag_name(other->tag));
+      return DUP_LAM(term, other, runtime);
+    }
+    else if (other->tag == Tag_Sup) {
+      runtime->steps ++;
+      if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET, runtime->steps, tag_name(term->tag), tag_name(other->tag));
+      return DUP_SUP(term, other, runtime);
+    }
+    else if (other->tag == Tag_Null) {
+      runtime->steps ++;
+      if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET, runtime->steps, tag_name(term->tag), tag_name(other->tag));
+      return DUP_NULL(term, other, runtime);
+    }
   }
   
-  if (handler != NULL){
-    runtime->steps ++;
-    if (DEBUG) printf(BLUE "%d: HANDLE %s -> %s\n" RESET,  runtime->steps, tag_name(term->tag), tag_name(other->tag));
-    handler(term, other);
-    return 1;
-  }
   return 0;
 }
 
@@ -481,7 +423,7 @@ int full_search = 0;
 SearchStack* redex_seen = NULL; 
 
 
-int search_redex(Node* term){
+int search_redex(Node* term, Runtime* runtime){
 
   if (fuel <= runtime->steps) return 0;
 
@@ -489,18 +431,18 @@ int search_redex(Node* term){
   if (term == NULL || term->s0 == NULL) return 0;
   Node* other = term->s0;
 
-  if (handle_redex(term, other)){
-    search_redex(term);
+  if (handle_redex(term, other, runtime)){
+    search_redex(term, runtime);
     return 1;
   }
 
   switch (term->tag){
     case Tag_Lam:
-      search_redex(other);
+      search_redex(other, runtime);
       return 0;
     case Tag_Sup:
-      search_redex(term->s0);
-      search_redex(term->s1);
+      search_redex(term->s0, runtime);
+      search_redex(term->s1, runtime);
       return 0;
     case Tag_Dup: case Tag_Dup2:
 
@@ -510,13 +452,13 @@ int search_redex(Node* term){
         }
         stack_push(&redex_seen, term->s0);
       }
-      if (search_redex(other)) return search_redex(term);
+      if (search_redex(other, runtime)) return search_redex(term, runtime);
 
       return 0;
     case Tag_App:
-      if (search_redex(other)) return search_redex(term);
+      if (search_redex(other, runtime)) return search_redex(term, runtime);
       if (full_search){
-        search_redex(term->s1);
+        search_redex(term->s1, runtime);
       }
       return 0;
     
@@ -527,15 +469,15 @@ int search_redex(Node* term){
 
 
 
-int run(int Nsteps){
+int run(int Nsteps, Runtime* runtime){
   fuel = Nsteps;
 
   full_search = 0;
-  search_redex(&(runtime->nodes[0]));
+  search_redex(&(runtime->nodes[0]), runtime);
 
   full_search = 1;
   redex_seen = NULL;
-  search_redex(&(runtime->nodes[0]));
+  search_redex(&(runtime->nodes[0]), runtime);
   stack_free(&redex_seen);
 
   return runtime->steps;
@@ -543,9 +485,12 @@ int run(int Nsteps){
 
 
 
+int get_node_count(Runtime* runtime){
+  return runtime->node_ctr;
+}
 
 
-void load(int* data){
+Runtime* load(int* data, Runtime* runtime){
 
   struct sigaction sa;
   struct sigaction old_sa;
@@ -562,13 +507,7 @@ void load(int* data){
   }
 
   if (runtime != NULL) error("new_runtime: runtime already exists\n");
-
-  runtime = malloc(sizeof(Runtime));
-  runtime->empty_index = 0;
-  runtime->node_ctr = 0;
-  runtime->free_list = NULL;
-  runtime->steps = 0;
-
+  runtime = calloc(1, sizeof(Runtime));
   int count = data[0];
 
   if (DEBUG) printf("LOAD: %d nodes\n", count);
@@ -578,7 +517,7 @@ void load(int* data){
   
   for (int i = 0; i < count; i++) {
     int idx = i * 4 + 1;
-    Node* node = new_node(data[idx], data[idx + 1], NULL, NULL);
+    Node* node = new_node(data[idx], data[idx + 1], NULL, NULL, runtime);
     nodes[i + 1] = node;
     if (DEBUG >= 2) printf("  created [%d] tag=%s label=%d\n", i + 1, tag_name(data[idx]), data[idx + 1]);
   }
@@ -591,15 +530,15 @@ void load(int* data){
     nodes[i + 1]->s1 = nodes[s1_idx];
     if (DEBUG >= 2) printf("  connected [%d] s0=%d s1=%d\n", i + 1, s0_idx, s1_idx);
   }
-
   free(nodes);
-  
+  return runtime;
 }
 
-int* unload(){
 
+
+
+int* unload(Runtime* runtime){
   if (runtime == NULL) error("unload: runtime is NULL\n");
-
   int* result = serialize(&(runtime->nodes[0]));
   free(runtime);
   runtime = NULL;

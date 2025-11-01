@@ -4,20 +4,21 @@ from enum import Enum, auto
 from string import Formatter
 from typing import Callable
 
+
+
 class Tag(Enum):
+  App = auto()
+  Lam = auto()
+  Sup = auto()
+  Dup = auto()
+  Dup2 = auto()
   Null = auto()
   Var = auto()
-  Root = auto()
+  Freed = auto()
+
   Prim = auto()
 
   intermediate_var = auto()
-
-  Lam = auto()
-  App = auto()
-  Dup = auto()
-  Dup2 = auto()
-  Sup = auto()
-  Freed = auto()
 
   def __str__(self)->str: return self.name
   def __repr__(self)->str: return self.name

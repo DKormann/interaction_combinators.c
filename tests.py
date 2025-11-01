@@ -4,12 +4,13 @@ import unittest
 from example import circular, cnat
 
 import scott  
-from main import run_term_c
+from main import get_lib, get_node_count_c, load_term_c, run_term_c
 from node import DEBUG, Node, hide_dups, print_tree, reset_labels
 
 
 hide_dups.set(True)
 print_tree.set(False)
+
 
 
 
@@ -24,6 +25,13 @@ def assert_normal_fmt(term:Node, expected:str | Node):
     expected = run_term_c(expected)
   term = run_term_c(term)
   assert_fmt(term, expected)    
+
+
+class TestAlloc(unittest.TestCase):
+  def test_alloc(self):
+    term = Node(lambda x: x)
+    load_term_c(term)
+    # assert get_node_count_c() == 1
 
 
 class TestFormat(unittest.TestCase):
