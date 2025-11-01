@@ -4,11 +4,13 @@ Scott encoding for natural numbers and functions on them
 
 from operator import truediv
 from typing_extensions import runtime
-from example import F, T
-from main import load_term_c, run, run_term_c, unload_term_c
-from node import DEBUG, Node, Tag, app, hide_dups, lam, lamvar, move, null, parse_lam, print_tree, sup, x, dup
+from .example import F, T
+from .main import load_term_c, run, run_term_c, unload_term_c
+from .helpers import DEBUG
+from .node import  Node, Tag, app, hide_dups, lam, lamvar, move, null, parse_lam, print_tree, sup, x, dup
 
-from example import cnat
+
+from .example import cnat
 import time
 
 
@@ -91,16 +93,8 @@ def run_c_2_2():
 def run_scott_eq_3():
   N = 300
   c = eq()(nat(N), nat(N-1))
+  run_term_c(c)
   
-  load_term_c(c)
-  st = time.time_ns()
-  steps = run()
-  dt = time.time_ns() - st
-  print(f"{steps=} {dt/1e9} seconds {(steps/dt * 1e3):.3f} Mips")
-  DEBUG.set(True)
-  r = unload_term_c()
-  print(r)
-  with hide_dups(False): print(r)
 
 
 def try_era_var():
@@ -112,9 +106,7 @@ def try_era_var():
 if __name__ == "__main__":  
 
 
-  # run_scott_eq_3()
-
-  run_c_2_2()
+  run_scott_eq_3()
 
 
   pass

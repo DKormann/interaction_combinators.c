@@ -1,6 +1,7 @@
 
 
-from node import Node, lam, x, app, sup, dup, var, null, Tag, hide_dups, tree, move, DEBUG
+from node import Node, lam, x, app, sup, dup, var, null, Tag, tree, move
+from helpers import DEBUG
 
 
 #%%

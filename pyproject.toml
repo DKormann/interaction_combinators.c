@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tinycombinator"
+version = "0.1.0"
+description = "A minimal Python and C implementation of interaction calculus runtime"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    {name = "Iain Banks", email = "iain@example.com"}
+]
+keywords = ["interaction calculus", "lambda calculus", "runtime"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Interpreters",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-xdist>=2.5",
+    "typing-extensions>=4.0",
+]
+test = [
+    "pytest>=7.0",
+    "pytest-xdist>=2.5",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "test*"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+python_files = "tests.py"
+addopts = "-v"

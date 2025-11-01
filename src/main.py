@@ -1,8 +1,10 @@
 from base64 import decodebytes
 from itertools import count
 import subprocess, ctypes, os, hashlib, threading
-from example import cnat
-from node import DEBUG, Node, Tag, hide_dups
+import time
+from .example import cnat
+from .node import Node, Tag
+from .helpers import DEBUG, TIMEIT, hide_dups, print_tree
 
 
 
@@ -118,15 +120,22 @@ def run(runtime, steps:int = DEFAULT_FUEL):
 def get_node_count_c() -> int: return get_lib().get_node_count()
 
 def run_term_c(term:Node, maxsteps: int = DEFAULT_FUEL, runs = DEFAULT_FUEL) -> Node:
+
+  t = 0
+
   if DEBUG: print(term)
   for batch in range(runs):
     runtime = load_term_c(term)
+    st = time.time_ns()
     steps = run(runtime, int(maxsteps))
+    t += time.time_ns() - st
     term = unload_term_c(runtime)
     if DEBUG: print(term)
     if steps < maxsteps: break
+  if TIMEIT and t > 0:
+    total_steps = batch * maxsteps + steps
+    print(f"\nFinal result {total_steps} steps: {t/1e9} seconds {(total_steps)/(t/1e3):.3f} Mips")
   if DEBUG:
-    print(f"\nFinal result { batch * maxsteps + steps} steps:")
     with hide_dups(True): print(term)
   return term
 

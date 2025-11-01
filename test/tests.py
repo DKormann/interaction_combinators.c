@@ -1,11 +1,12 @@
 from math import exp
 import unittest
 
-from example import circular, cnat
+from src.example import circular, cnat
 
-import scott  
-from main import get_lib, get_node_count_c, load_term_c, run_term_c
-from node import DEBUG, Node, hide_dups, print_tree, reset_labels
+import src.scott as scott  
+from src.main import get_lib, get_node_count_c, load_term_c, run_term_c
+from src.node import Node, reset_labels
+from src.helpers import DEBUG, hide_dups, print_tree
 
 
 hide_dups.set(True)

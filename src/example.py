@@ -1,6 +1,8 @@
 
 from typing import Callable
-from node import Node, Tag, app, hide_dups, lam, move, null, parse_lam, print_tree, sup, x, dup
+from .node import Node, Tag, app, lam, move, null, parse_lam, sup, x, dup
+from .helpers import hide_dups
+
 
 def id(): return lam(x(0))
 
