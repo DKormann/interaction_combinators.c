@@ -16,6 +16,10 @@ corrolary:
 - searching for minimal terms provides generality
 
 
+## examples
+
+take a look at the [examples](examples/start.ipynb) for a quick start.
+
 ## IC runtime
 
 its suprisingly easy to implement a full interaction based runtime in python and in C:
@@ -55,7 +59,7 @@ implementing python runtime is quite
     - [ ] garbage collection
     - [ ] parallel
  - [ ] Type theory
- - [ ] type system based on ICC
+ - [ ] program search
 
 
 

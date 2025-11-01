@@ -5,7 +5,7 @@ from tinycombinator.terms import circular, cnat
 
 from tinycombinator import scott
 from tinycombinator.main import get_lib, get_node_count_c, load_term_c, run_term_c
-from tinycombinator.node import Node, reset_labels
+from tinycombinator.node import IC, reset_labels
 from tinycombinator.helpers import DEBUG, hide_dups, print_tree
 
 
@@ -15,14 +15,14 @@ print_tree.set(False)
 
 
 
-def assert_fmt(term:Node, expected:str|Node):
+def assert_fmt(term:IC, expected:str|IC):
 
-  if isinstance(expected, Node): expected = str(expected)
+  if isinstance(expected, IC): expected = str(expected)
   with print_tree(False):
     assert str(term) == expected, f"Expected {expected}, got {str(term)}"
 
-def assert_normal_fmt(term:Node, expected:str | Node):
-  if isinstance(expected, Node):
+def assert_normal_fmt(term:IC, expected:str | IC):
+  if isinstance(expected, IC):
     expected = run_term_c(expected)
   term = run_term_c(term)
   assert_fmt(term, expected)    
@@ -30,19 +30,19 @@ def assert_normal_fmt(term:Node, expected:str | Node):
 
 class TestAlloc(unittest.TestCase):
   def test_alloc(self):
-    term = Node(lambda x: x)
+    term = IC(lambda x: x)
     load_term_c(term)
     # assert get_node_count_c() == 1
 
 
 class TestFormat(unittest.TestCase):
   def test_fmt(self):
-    term = Node(lambda x: x)
+    term = IC(lambda x: x)
     assert_fmt(term, "λa a")
     assert_fmt(term(1), "( λa a 1)")
   
   def test_fmt_app(self):
-    term = Node(lambda x: x)
+    term = IC(lambda x: x)
     assert_fmt(term, "λa a")
     assert_fmt(term(1), "( λa a 1)")
   
@@ -61,9 +61,9 @@ class TestFormat(unittest.TestCase):
 class TestNormalization(unittest.TestCase):
 
   def test_id(self):
-    def iden(): return Node(lambda x: x)
+    def iden(): return IC(lambda x: x)
     assert_normal_fmt(iden(), "λa a")
-    assert_normal_fmt(iden()(Node(None)), "Nul")
+    assert_normal_fmt(iden()(IC(None)), "Nul")
   
   def test_circular(self):
     for i in range(2):

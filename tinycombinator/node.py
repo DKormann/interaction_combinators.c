@@ -22,18 +22,18 @@ class Tag(Enum):
   def __repr__(self)->str: return self.name
 
 
-class Node:
-  def __init__(self, tag: Tag | None | Callable | int = None, s0:"Node" = None, s1:"Node" = None, label:int = None):
+class IC:
+  def __init__(self, tag: Tag | None | Callable | int = None, s0:"IC" = None, s1:"IC" = None, label:int = None):
     if tag is None: tag = Tag.Null
-    self.s0 = None if s0 is None else Node.into(s0)
-    self.s1 = None if s1 is None else Node.into(s1)
+    self.s0 = None if s0 is None else IC.into(s0)
+    self.s1 = None if s1 is None else IC.into(s1)
     self.label = label
 
     if isinstance(tag, Tag): self.tag = tag
-    else: move(Node.into(tag),self)
+    else: move(IC.into(tag),self)
   def __str__(self)->str: return tree(self, {})
   def __repr__(self)->str: return str(self)
-  def dup(self, label:int = None)->"Node":
+  def dup(self, label:int = None)->"IC":
     ds = dup(move(self), label)
     move(ds[0], self)
     return ds[1]
@@ -45,19 +45,19 @@ class Node:
 
 
   @staticmethod
-  def into(arg)->"Node":
-    if isinstance(arg, Node): return arg
+  def into(arg)->"IC":
+    if isinstance(arg, IC): return arg
     if callable(arg):
 
       if arg.__code__.co_argcount == 0: return arg()
 
-      l = Node(Tag.Lam, null(), None)
-      v = Node(Tag.Var, l)
+      l = IC(Tag.Lam, null(), None)
+      v = IC(Tag.Var, l)
       l.s1 = v
-      l.s0 = Node.into(mk_curried(arg)(v))
+      l.s0 = IC.into(mk_curried(arg)(v))
 
       found = False
-      def arg_dups(arg:Node):
+      def arg_dups(arg:IC):
         nonlocal found
         if arg == v:
           if found: return v.dup()
@@ -69,10 +69,10 @@ class Node:
       arg_dups(l.s0)
       if not found: l.s1 = None
       return l
-    if (isinstance(arg, int)): return Node(Tag.Prim, label = arg)
-    if arg is None: return Node(Tag.Null)
+    if (isinstance(arg, int)): return IC(Tag.Prim, label = arg)
+    if arg is None: return IC(Tag.Null)
   
-  def __call__(self, *args:"Node")->"Node":
+  def __call__(self, *args:"IC")->"IC":
     if not args: return self
     return app(self, args[0])(*args[1:])
 
@@ -80,7 +80,7 @@ class Node:
 
 def mk_curried(arg:Callable)->Callable:
   args = []
-  def curried(x:Node)->Node:
+  def curried(x:IC)->IC:
     args.append(x)
     if len(args) == arg.__code__.co_argcount: return arg(*args)
     return curried
@@ -92,16 +92,16 @@ def mk_curried(arg:Callable)->Callable:
 
 
 
-def x(var:int) -> Node: return Node(Tag.intermediate_var, label = var)
+def x(var:int) -> IC: return IC(Tag.intermediate_var, label = var)
 
-def num(n:int) -> Node: return Node(Tag.Prim, label = n)
+def num(n:int) -> IC: return IC(Tag.Prim, label = n)
 
-def var(lam:Node) -> Node:
-  lam.s1 = Node(Tag.Var, lam)
+def var(lam:IC) -> IC:
+  lam.s1 = IC(Tag.Var, lam)
   lam.s1.s0 = lam
   return lam.s1
 
-def app(func:Node, arg:Node) -> Node: return Node(Tag.App, func, arg)
+def app(func:IC, arg:IC) -> IC: return IC(Tag.App, func, arg)
 
 ilab = 70
 
@@ -109,32 +109,32 @@ def reset_labels():
   global ilab
   ilab = 70
 
-def sup(a:Node, b:Node, label:int = None)->Node:
+def sup(a:IC, b:IC, label:int = None)->IC:
   global ilab
   if label is None: label = (ilab := ilab + 1)
-  return Node(Tag.Sup, a, b, label)
+  return IC(Tag.Sup, a, b, label)
 
-def dup(s0:Node, label:int = None)->tuple[Node, Node]:
+def dup(s0:IC, label:int = None)->tuple[IC, IC]:
   global ilab
   if label is None: label = (ilab := ilab + 1)
-  d = Node(Tag.Dup, s0, label = label)
-  d2 = Node(Tag.Dup2, s0, d, label)
+  d = IC(Tag.Dup, s0, label = label)
+  d2 = IC(Tag.Dup2, s0, d, label)
   d.s1 = d2
   d2.s1 = d
   return d, d2
 
 
 
-def null(): return Node(Tag.Null)
+def null(): return IC(Tag.Null)
 
 
-def lam(body:Node) -> Node:
-  res = Node(Tag.Lam, body)
+def lam(body:IC) -> IC:
+  res = IC(Tag.Lam, body)
   parse_lam(res, body, 0)
   return res
 
-def move(src:Node, dst:Node | None = None)->Node:
-  if dst is None: dst = Node(None)
+def move(src:IC, dst:IC | None = None)->IC:
+  if dst is None: dst = IC(None)
   if isinstance(src, list) or isinstance(src, tuple): return [move(s, d) for s, d in zip(src, dst)]
 
   dst.tag = src.tag
@@ -152,14 +152,14 @@ def move(src:Node, dst:Node | None = None)->Node:
   return dst
 
 
-def lamvar(bod:Node|None = None)->tuple[Node, Node]:
-  x = Node(Tag.Var)
-  lam = Node(Tag.Lam, bod, x)
+def lamvar(bod:IC|None = None)->tuple[IC, IC]:
+  x = IC(Tag.Var)
+  lam = IC(Tag.Lam, bod, x)
   x.s0 = lam
   return lam,x
 
 
-def parse_lam(lam:Node, current:Node, depth:int):
+def parse_lam(lam:IC, current:IC, depth:int):
   print("parse_lam", current.tag)
   if current.tag == Tag.Lam: parse_lam(lam, current.s0, depth + 1)
   elif current.tag in [Tag.App, Tag.Sup]: parse_lam(lam, current.s1, depth)
@@ -173,9 +173,9 @@ def parse_lam(lam:Node, current:Node, depth:int):
 
 
 
-def tree(term:Node, ctx:dict[Node, int])->str:
+def tree(term:IC, ctx:dict[IC, int])->str:
   ws = "  " if print_tree else ""
-  def varname(node:Node | None):
+  def varname(node:IC | None):
     if node is None: return ""
     name = chr(len(ctx) % 26 + 97) + ("" if len(ctx) < 26 else chr(len(ctx) // 26 + 97))
     return ctx.setdefault(node, name)
@@ -184,7 +184,7 @@ def tree(term:Node, ctx:dict[Node, int])->str:
     if sum(len(ln) for ln in lns) <= 20: return [ws + " ".join(map(str.strip, lns))]
     return [ws + ln for ln in lns]
 
-  def _tree(term:Node | None, dstack:list[tuple[int, bool]])->list[str]:
+  def _tree(term:IC | None, dstack:list[tuple[int, bool]])->list[str]:
     if term is None: return ["NONE"]
     match term.tag:
       case Tag.Lam: return [f"λ{varname(term.s1)} " + (p := _tree(term.s0, dstack))[0].strip()] + p[1:]

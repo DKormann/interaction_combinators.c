@@ -4,22 +4,22 @@ import time
 from typing import Callable
 
 from tinycombinator.run import reduce
-from tinycombinator.node import Node, Tag
+from tinycombinator.node import IC, Tag
 from tinycombinator.helpers import BACKEND, DEBUG, TIMEIT, hide_dups, print_tree
 
 
 
-def to_c_data(node: Node) -> list[int]:
-  """Serialize a Node graph to a flat int array for passing to C"""
+def to_c_data(node: IC) -> list[int]:
+  """Serialize a IC graph to a flat int array for passing to C"""
   ctx = {}
   nodes = []
   taken = {}
 
-  def take(owner: Node, owned: Node):
-    if owned in taken: raise ValueError(f"Node {owned} is already taken by {taken[owned]}")
+  def take(owner: IC, owned: IC):
+    if owned in taken: raise ValueError(f"IC {owned} is already taken by {taken[owned]}")
     taken[owned] = owner
   
-  def visit(n: Node):
+  def visit(n: IC):
     if n is None or n in ctx: return
     ctx[n] = len(nodes) + 1  # 1-indexed, 0 is NULL
     nodes.append(n)
@@ -45,7 +45,7 @@ def to_c_data(node: Node) -> list[int]:
   
   return data
 
-def from_c_data(res:ctypes.POINTER(ctypes.c_int))->Node:
+def from_c_data(res:ctypes.POINTER(ctypes.c_int))->IC:
 
 
   tags = [Tag.App, Tag.Lam, Tag.Sup, Tag.Dup, Tag.Dup2, Tag.Null, Tag.Var, Tag.Freed]
@@ -53,7 +53,7 @@ def from_c_data(res:ctypes.POINTER(ctypes.c_int))->Node:
   l = res[0]
   if l == -1: raise RuntimeError("Segmentation fault occurred in C code")
   
-  nodes = [None] + [Node(None) for _ in range(l)]
+  nodes = [None] + [IC(None) for _ in range(l)]
 
   for i in range(l):
     if DEBUG>1: print(res[i * 4 + 1])
@@ -62,7 +62,7 @@ def from_c_data(res:ctypes.POINTER(ctypes.c_int))->Node:
     nodes[i + 1].s0 = nodes[res[i * 4 + 3]]
     nodes[i + 1].s1 = nodes[res[i * 4 + 4]]
 
-  def refcount(node:Node)->int: return sum((n.s0 == node) + (n.s1 == node) for n in nodes[1:])
+  def refcount(node:IC)->int: return sum((n.s0 == node) + (n.s1 == node) for n in nodes[1:])
 
   for node in nodes[1:]:
     if node.tag == Tag.Lam and refcount(node.s1) < 2: node.s1 = None
@@ -113,9 +113,9 @@ def get_lib():
 
   return _local.lib
 
-def load_term_c(term: Node) -> ctypes.c_void_p: return get_lib().load((ctypes.c_int * len(to_c_data(term)))(*to_c_data(term)))
+def load_term_c(term: IC) -> ctypes.c_void_p: return get_lib().load((ctypes.c_int * len(to_c_data(term)))(*to_c_data(term)))
 
-def unload_term_c(runtime) -> Node: return from_c_data(get_lib().unload(runtime))
+def unload_term_c(runtime) -> IC: return from_c_data(get_lib().unload(runtime))
 
 DEFAULT_FUEL = 1<<30
 
@@ -124,7 +124,7 @@ def run(runtime, steps:int = DEFAULT_FUEL):
 
 def get_node_count_c() -> int: return get_lib().get_node_count()
 
-def run_term_c(term:Node, maxsteps: int = DEFAULT_FUEL, runs = DEFAULT_FUEL) -> Node:
+def run_term_c(term:IC, maxsteps: int = DEFAULT_FUEL, runs = DEFAULT_FUEL) -> IC:
 
   t = 0
 
@@ -147,6 +147,6 @@ def run_term_c(term:Node, maxsteps: int = DEFAULT_FUEL, runs = DEFAULT_FUEL) -> 
   return term
 
 
-def execute(node:Node, *args, **kwargs)->Callable[[Node, int, int], Node]:
+def execute(node:IC, *args, **kwargs)->Callable[[IC, int, int], IC]:
   if BACKEND == "c": return run_term_c(node, *args, **kwargs)
   return reduce(node)
