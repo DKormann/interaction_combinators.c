@@ -1,9 +1,0 @@
-
-[dev]
-pytest>=7.0
-pytest-xdist>=2.5
-typing-extensions>=4.0
-
-[test]
-pytest>=7.0
-pytest-xdist>=2.5
